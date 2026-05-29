@@ -1,0 +1,12 @@
+[project]
+name = "document-redaction-assistant"
+version = "0.1.0"
+description = "Local document redaction assistant for STPE-AI assessment-preserving uploads."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+document-redaction-assistant = "redaction_assistant.cli:main"
+
+[tool.unittest]
+start-dir = "tests"

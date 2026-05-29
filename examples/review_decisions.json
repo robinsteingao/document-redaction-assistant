@@ -1,0 +1,6 @@
+{
+  "example_candidate_id": {
+    "action": "redact",
+    "strategy": "pseudonym"
+  }
+}
