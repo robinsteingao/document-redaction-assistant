@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--out", required=True)
     build.add_argument("--customer-dictionary")
     build.add_argument("--review-decisions")
+    build.add_argument("--customer-confirmed-degradation-risk", action="store_true")
     build.add_argument("files", nargs="+")
 
     review = sub.add_parser("review-workspace", help="Build local review candidates and HTML workspace.")
@@ -183,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             project_alias_id=args.project_alias_id,
             customer_dictionary=args.customer_dictionary,
             review_decisions=decisions,
+            customer_confirmed_degradation_risk=args.customer_confirmed_degradation_risk,
         )
         outputs = write_package(args.out, package, mapping)
         outputs.update(export_review_workspace(args.out, package, mapping))

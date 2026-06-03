@@ -46,6 +46,7 @@ def _html(version: str, service_url: str | None) -> str:
     input, textarea, select {{ width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:6px; padding:9px; font-family:inherit; font-size:14px; background:white; }}
     textarea {{ min-height:86px; resize:vertical; }}
     .hint {{ color:var(--muted); font-size:13px; margin:6px 0 0; }}
+    .gate {{ background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:12px; margin-top:12px; color:#9a3412; }}
     pre {{ white-space:pre-wrap; word-break:break-word; background:#f7fafc; border:1px solid var(--line); border-radius:6px; padding:12px; min-height:48px; }}
     button {{ padding:9px 14px; border:0; border-radius:6px; background:var(--accent); color:white; cursor:pointer; }}
     button.secondary {{ background:#475569; }}
@@ -104,6 +105,16 @@ def _html(version: str, service_url: str | None) -> str:
       <button class="danger" onclick="cancelCurrentJob()">取消当前任务</button>
       <button class="secondary" onclick="retryCurrentJob()">重试失败任务</button>
     </div>
+    <div class="gate">
+      <b>上传前评价影响门禁</b>
+      <p>客户可在生成前粘贴 <code>review_decisions.json</code>，自由选择字段 <code>keep/redact</code> 和 <code>pseudonym/mask/range</code> 策略。技术指标、验证信息、金额、专利等字段如被强脱敏，系统会在脱敏包中写入评价影响提示。</p>
+      <label for="reviewDecisions">客户自定义脱敏决策 JSON（可选）</label>
+      <textarea id="reviewDecisions" placeholder='例如：{{"候选字段ID":{{"action":"keep"}}}}。首次生成后可在 review_workspace.html 导出决策文件，再粘贴到此处重跑。'></textarea>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:10px;">
+        <input id="confirmDegradationRisk" type="checkbox" style="width:auto;">
+        我已确认：如强制脱敏高影响评价字段，可能导致 STPE-AI 评价降级，并接受该风险。
+      </label>
+    </div>
     <h3>预检结果</h3>
     <pre id="planResult">等待预检</pre>
     <h3>处理进度</h3>
@@ -143,11 +154,20 @@ function readPayload() {{
   const out = document.getElementById('outputDir').value.trim();
   const project_alias_id = document.getElementById('projectAlias').value.trim();
   const ocr_mode = document.getElementById('ocrMode').value;
-  return {{project_alias_id, out, input_paths, ocr_mode, enable_conversion: true}};
+  const rawDecisions = document.getElementById('reviewDecisions').value.trim();
+  const confirmedRisk = document.getElementById('confirmDegradationRisk').checked === true;
+  const payload = {{project_alias_id, out, input_paths, ocr_mode, enable_conversion: true}};
+  if (rawDecisions) {{
+    try {{ payload.review_decisions = JSON.parse(rawDecisions); }}
+    catch (err) {{ throw new Error('客户自定义脱敏决策 JSON 格式错误：' + err.message); }}
+  }}
+  if (confirmedRisk) payload.customer_confirmed_degradation_risk = true;
+  return payload;
 }}
 async function runInputPlan() {{
   const el = document.getElementById('planResult');
-  const payload = readPayload();
+  let payload;
+  try {{ payload = readPayload(); }} catch (err) {{ el.textContent = err.message; return; }}
   if (!serviceUrl) {{
     el.textContent = '当前未配置本地服务，请使用命令行模式。';
     return;
@@ -166,7 +186,8 @@ async function runInputPlan() {{
 }}
 async function startBuildJob() {{
   const el = document.getElementById('buildResult');
-  const payload = readPayload();
+  let payload;
+  try {{ payload = readPayload(); }} catch (err) {{ el.textContent = err.message; return; }}
   if (!serviceUrl) {{
     el.textContent = '当前未配置本地服务，请使用命令行模式。';
     return;

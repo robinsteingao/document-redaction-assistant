@@ -72,6 +72,7 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                     alias,
                     customer_dictionary=payload.get("customer_dictionary"),
                     review_decisions=decisions,
+                    customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                     ocr_mode=payload.get("ocr_mode"),
                 )
             finally:
@@ -193,6 +194,7 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
                 alias,
                 customer_dictionary=payload.get("customer_dictionary"),
                 review_decisions=decisions,
+                customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                 ocr_mode=payload.get("ocr_mode"),
                 progress_cb=progress,
             )
@@ -292,10 +294,15 @@ def _public_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "project_alias_id",
         "customer_dictionary",
         "review_decisions",
+        "customer_confirmed_degradation_risk",
         "ocr_mode",
         "enable_conversion",
     }
     return {key: value for key, value in payload.items() if key in allowed}
+
+
+def _explicit_bool(value: Any) -> bool:
+    return value is True
 
 
 def _build_outputs(
@@ -305,6 +312,7 @@ def _build_outputs(
     *,
     customer_dictionary: Path | str | dict | None = None,
     review_decisions: dict[str, dict[str, Any]] | None = None,
+    customer_confirmed_degradation_risk: bool = False,
     ocr_mode: str | None = None,
     progress_cb=None,
 ) -> dict[str, Path]:
@@ -314,6 +322,7 @@ def _build_outputs(
         project_alias_id=alias,
         customer_dictionary=customer_dictionary,
         review_decisions=review_decisions,
+        customer_confirmed_degradation_risk=customer_confirmed_degradation_risk,
         ocr_max_pages=ocr_max_pages_for_mode(ocr_mode),
         progress_cb=progress_cb,
     )

@@ -9,6 +9,7 @@ from .ocr_adapter import extract_text_with_ocr
 from .parsers import parse_file
 from .redactor import build_mapping, public_mapping_stats, redact_text, restore_text
 from .rules import contains_technical_signal, detect_entities_with_dictionary
+from .impact import build_redaction_impact_summary
 
 
 def build_redaction_package(
@@ -18,6 +19,7 @@ def build_redaction_package(
     redaction_policy: str = "assessment_preserving",
     customer_dictionary: Path | str | dict | None = None,
     review_decisions: dict[str, dict[str, Any]] | None = None,
+    customer_confirmed_degradation_risk: bool = False,
     ocr_max_pages: int | None = None,
     progress_cb: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -85,6 +87,12 @@ def build_redaction_package(
         },
         "analysis_preservation_flags": _analysis_flags(all_redacted_text, mapping),
         "review_warnings": _review_warnings(all_redacted_text, mapping, manifest),
+        "redaction_impact_summary": build_redaction_impact_summary(
+            entities,
+            mapping,
+            review_decisions,
+            customer_confirmed_degradation_risk=customer_confirmed_degradation_risk,
+        ),
     }
     return package, mapping
 
@@ -145,6 +153,7 @@ def build_review_report(package: dict[str, Any]) -> str:
     stats = package.get("field_mapping_stats", {})
     flags = package.get("analysis_preservation_flags", {})
     warnings = package.get("review_warnings", [])
+    impact = package.get("redaction_impact_summary", {})
     lines = [
         "# 文档安全脱敏检查报告",
         "",
@@ -155,6 +164,8 @@ def build_review_report(package: dict[str, Any]) -> str:
         f"- 原始文件上传: {package.get('redaction_policy', {}).get('original_files_uploaded')}",
         f"- TRL 因子保留: {flags.get('trl_factors_preserved')}",
         f"- 效益因子保留: {flags.get('benefit_factors_preserved')}",
+        f"- 评价影响门禁: {impact.get('overall_level')}",
+        f"- 门禁提示: {impact.get('upload_gate_message')}",
         "",
         "## 字段统计",
         "",
