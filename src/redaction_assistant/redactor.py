@@ -14,9 +14,10 @@ def build_mapping(entities: list[Entity], review_decisions: dict[str, dict[str, 
     for entity in entities:
         candidate_id = candidate_id_for(entity)
         decision = (review_decisions or {}).get(candidate_id, {})
-        if decision.get("action") == "keep":
+        action = decision.get("action")
+        if action == "keep" or (entity.strategy == "keep" and action != "redact"):
             continue
-        strategy = decision.get("strategy") or entity.strategy
+        strategy = decision.get("strategy") or ("mask" if entity.strategy == "keep" else entity.strategy)
         counters[entity.placeholder_prefix] += 1
         placeholder = f"{entity.placeholder_prefix}{_letter(counters[entity.placeholder_prefix])}"
         replacement = placeholder

@@ -17,17 +17,21 @@ class Entity:
 
 
 LABEL_PATTERNS = [
-    ("project_name", "项目", "pseudonym", re.compile(r"项目名称[:：]\s*([^。；;\n|]+)")),
-    ("organization", "单位", "pseudonym", re.compile(r"(?:承担单位|项目单位|合作单位|应用单位)[:：]\s*([^。；;\n|]+)")),
+    ("project_name", "项目", "pseudonym", re.compile(r"项目名称[:：]\s*([^。；;，,\n|]+)")),
+    ("organization", "单位", "pseudonym", re.compile(r"(?:承担单位|项目单位|合作单位|应用单位)[:：]\s*([^。；;，,\n|]+)")),
+    ("person", "人员", "pseudonym", re.compile(r"(?:联系人|负责人|项目负责人|经办人)[:：]\s*([\u4e00-\u9fa5]{2,4})")),
+    ("amount", "金额区间", "range", re.compile(r"(?:Amount|Budget|Cost|Revenue|金额|合同金额|预算|收益)[:：]\s*(\$?\s*\d+(?:\.\d+)?\s*(?:亿元|万元|元|USD|RMB|CNY|dollars?)?)", re.IGNORECASE)),
 ]
 
 REGEX_PATTERNS = [
     ("contract_id", "合同编号", "pseudonym", re.compile(r"\bHT-\d{4}-\d{3,}\b", re.IGNORECASE)),
     ("phone", "电话", "mask", re.compile(r"\b1[3-9]\d{9}\b")),
     ("email", "邮箱", "mask", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
-    ("patent_id", "专利", "pseudonym", re.compile(r"\bZL\d{9,13}\.\d\b", re.IGNORECASE)),
+    ("patent_id", "专利", "pseudonym", re.compile(r"\b(?:ZL|CN)\d{9,13}(?:\.\d)?\b", re.IGNORECASE)),
     ("software_copyright", "软著", "pseudonym", re.compile(r"\b\d{4}SR\d{5,8}\b", re.IGNORECASE)),
     ("amount", "金额区间", "range", re.compile(r"(?<![A-Za-z0-9])\d+(?:\.\d+)?\s*(?:亿元|万元|元)")),
+    ("technical_metric", "技术指标", "keep", re.compile(r"(?:≤|>=|≥|<=)?\s*\d+(?:\.\d+)?\s*(?:kV|KV|%|％|次|天|小时|h|MW|kW|MWh|kWh)")),
+    ("validation_evidence", "验证信息", "keep", re.compile(r"(?:试运行|现场验证|示范应用|第三方检测|验收结论)[^。；;\n]{0,30}")),
 ]
 
 TECHNICAL_SIGNAL = re.compile(r"(?:kV|KV|误差|精度|试运行|试验|验证|达标|样机|现场|≤|>=|%|％|\d+\s*天)")
@@ -112,12 +116,18 @@ def amount_range(value: str) -> str:
         return "金额区间未知"
     number = float(number_match.group(0))
     unit = "元"
+    normalized = value.lower()
     if "亿元" in value:
         number *= 10000
         unit = "万元"
     elif "万元" in value:
         unit = "万元"
     elif "元" in value:
+        number /= 10000
+        unit = "万元"
+    elif "$" in value or "usd" in normalized or "dollar" in normalized:
+        unit = "外币金额"
+    elif "rmb" in normalized or "cny" in normalized:
         number /= 10000
         unit = "万元"
 
@@ -135,4 +145,4 @@ def amount_range(value: str) -> str:
         label = "1000万至5000万"
     else:
         label = "高于5000万"
-    return label if unit == "万元" else label
+    return label if unit in {"万元", "外币金额"} else label

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .parsers import parse_file
+from .impact import ASSESSMENT_IMPACT
 from .redactor import candidate_id_for
 from .rules import detect_entities_with_dictionary
 from .workflow import build_restore_preview, build_review_report
@@ -34,10 +35,11 @@ def build_review_workspace(
             "kind": entity.kind,
             "original": entity.original,
             "default_strategy": entity.strategy,
-            "recommended_action": "redact",
+            "recommended_action": "keep" if entity.strategy == "keep" else "redact",
             "placeholder_prefix": entity.placeholder_prefix,
             "preservation_value": entity.replacement_hint,
             "review_hint": _review_hint(entity.kind, entity.strategy),
+            "impact": ASSESSMENT_IMPACT.get(entity.kind, {"domain": "other", "level": "low"}),
         })
     return {
         "schema_version": "redaction_review_workspace.v1",
@@ -54,7 +56,7 @@ def review_decisions_from_mapping(raw: dict[str, dict[str, Any]]) -> dict[str, d
         strategy = decision.get("strategy")
         if action not in {"redact", "keep"}:
             action = "redact"
-        if strategy not in {None, "pseudonym", "mask", "range"}:
+        if strategy not in {None, "pseudonym", "mask", "range", "keep"}:
             strategy = None
         decisions[str(candidate_id)] = {"action": action, "strategy": strategy}
     return decisions
@@ -72,7 +74,7 @@ def export_review_workspace(
     html_path = output / "review_workspace.html"
     report_path = output / "redaction_review_report.md"
 
-    candidates = _mapping_to_candidates(mapping)
+    candidates = _mapping_to_candidates(mapping, package)
     preview = build_restore_preview(package, mapping)
     candidates_path.write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     preview_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -86,26 +88,46 @@ def export_review_workspace(
     }
 
 
-def _mapping_to_candidates(mapping: dict[str, Any]) -> dict[str, Any]:
+def _mapping_to_candidates(mapping: dict[str, Any], package: dict[str, Any] | None = None) -> dict[str, Any]:
+    items = [
+        {
+            "candidate_id": item.get("candidate_id"),
+            "kind": item.get("kind"),
+            "placeholder": item.get("placeholder"),
+            "replacement": item.get("replacement"),
+            "strategy": item.get("strategy"),
+            "preservation_value": item.get("preservation_value"),
+            "impact_level": ASSESSMENT_IMPACT.get(str(item.get("kind")), {}).get("level", "low"),
+            "impact_message": ASSESSMENT_IMPACT.get(str(item.get("kind")), {}).get("message", "请复核是否影响评价。"),
+        }
+        for item in mapping.get("items", [])
+    ]
+    seen = {item.get("candidate_id") for item in items}
+    for impact_item in (package or {}).get("redaction_impact_summary", {}).get("items", []):
+        candidate_id = impact_item.get("candidate_id")
+        if candidate_id in seen:
+            continue
+        items.append({
+            "candidate_id": candidate_id,
+            "kind": impact_item.get("kind"),
+            "placeholder": "",
+            "replacement": "",
+            "strategy": impact_item.get("strategy") or "keep",
+            "preservation_value": None,
+            "impact_level": impact_item.get("impact_level"),
+            "impact_message": impact_item.get("message"),
+        })
     return {
         "schema_version": "redaction_review_candidates.v1",
-        "items": [
-            {
-                "candidate_id": item.get("candidate_id"),
-                "kind": item.get("kind"),
-                "placeholder": item.get("placeholder"),
-                "replacement": item.get("replacement"),
-                "strategy": item.get("strategy"),
-                "preservation_value": item.get("preservation_value"),
-            }
-            for item in mapping.get("items", [])
-        ],
+        "items": items,
     }
 
 
 def _review_hint(kind: str, strategy: str) -> str:
     if kind == "amount":
         return "金额影响效益分析，推荐区间化；强脱敏会降低经济性判断可信度。"
+    if kind in {"technical_metric", "validation_evidence"}:
+        return "该字段参与 STPE-AI 评价，默认建议保留；如涉及密级可选择脱敏，但需确认评价降级风险。"
     if kind in {"project_name", "organization", "contract_id", "phone", "email"}:
         return "身份识别字段，推荐稳定假名化或强脱敏。"
     if kind == "patent_id":
@@ -124,6 +146,8 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
             f"<td>{escape(str(item.get('placeholder') or ''))}</td>"
             f"<td>{escape(str(item.get('strategy') or ''))}</td>"
             f"<td>{escape(str(item.get('preservation_value') or ''))}</td>"
+            f"<td>{escape(str(item.get('impact_level') or ''))}</td>"
+            f"<td>{escape(str(item.get('impact_message') or ''))}</td>"
             "</tr>"
         )
     warnings = "".join(f"<li>{escape(str(w))}</li>" for w in package.get("review_warnings", [])) or "<li>未发现阻断性脱敏风险。</li>"
@@ -167,7 +191,7 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
     <h2>候选字段</h2>
     <p>本页可用于本地复核。需要生成决策文件时，可在下方文本框编辑 JSON 后保存为 <code>review_decisions.json</code>，再由命令行重新生成上传包。</p>
     <table>
-      <thead><tr><th>类型</th><th>占位符</th><th>策略</th><th>保真值</th></tr></thead>
+      <thead><tr><th>类型</th><th>占位符</th><th>策略</th><th>保真值</th><th>影响等级</th><th>评价影响提示</th></tr></thead>
       <tbody>{''.join(rows)}</tbody>
     </table>
   </section>
@@ -209,7 +233,7 @@ def _default_decisions_json(candidates: dict[str, Any]) -> str:
         candidate_id = item.get("candidate_id")
         if candidate_id:
             decisions[candidate_id] = {
-                "action": "redact",
+                "action": "keep" if item.get("strategy") == "keep" else "redact",
                 "strategy": item.get("strategy") or "pseudonym",
             }
     return json.dumps(decisions, ensure_ascii=False, indent=2)
