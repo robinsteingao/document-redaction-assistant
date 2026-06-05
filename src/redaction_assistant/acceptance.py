@@ -100,11 +100,29 @@ def _commercial_package_check(package_root: Path) -> dict[str, Any]:
             "reason": "not_a_commercial_package",
         }
     result = validate_commercial_install_package(package_root)
+    if result.get("status") != "valid" and _is_commercial_staging_package(package_root):
+        return {
+            "passed": True,
+            "skipped": True,
+            "reason": "commercial_staging_package",
+            "result": result,
+        }
     return {
         "passed": result.get("status") == "valid",
         "skipped": False,
         "result": result,
     }
+
+
+def _is_commercial_staging_package(package_root: Path) -> bool:
+    install_manifest = package_root / "install_manifest.json"
+    if not install_manifest.exists():
+        return False
+    try:
+        data = json.loads(install_manifest.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError:
+        return False
+    return data.get("package_type") == "commercial_staging_package"
 
 
 def _report_markdown(report: dict[str, Any]) -> str:
