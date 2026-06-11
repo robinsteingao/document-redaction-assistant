@@ -374,6 +374,8 @@ def _start_here(version: str) -> str:
 
 本包用于最小安装验收：解压后不需要理解源码结构，优先运行 `app\\start_desktop_app.bat`、`app\\install_local.bat` 和 `app\\run_sample_self_test.bat`。
 
+如包根目录存在 `BLIND_TEST_QUICK_START.md`，盲测人员请优先阅读该文件；否则以本文件作为技术验收入口。
+
 验收顺序:
 
 1. 双击或在 PowerShell 中运行 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
@@ -393,7 +395,8 @@ def _start_here(version: str) -> str:
 边界:
 
 - 当前是可测试安装包，不是正式 MSI/EXE 安装器。
-- 当前不内置真实 OCR 模型。
+- 基础可测试安装包不保证内置 Python、OCR wheelhouse 或 Office 转换器；完整离线 runtime-ready 包会额外提供 `app\\install_offline_ocr.bat`、`app\\validate_offline_ocr.bat` 和 `BLIND_TEST_QUICK_START.md`。
+- 未安装 OCR 时不影响非扫描件（DOCX、XLSX、文本型 PDF、TXT）的正常处理。
 - OCR 插件边界见 `app\\rules\\ocr_plugin_manifest.json`。
 - 离线运行时边界见 `app\\runtime\\runtime_manifest.json`。
 - 本地授权文件见 `app\\license\\local_license.json`。

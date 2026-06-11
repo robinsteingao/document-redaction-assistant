@@ -31,6 +31,8 @@ def build_commercial_install_package(
     offline_status = "complete_offline" if all(item["status"] == "bundled" for item in component_status.values()) else "staging_required"
     _write_commercial_scripts(app_dir)
     build_offline_ocr_install_plan(app_dir, engine="rapidocr")
+    _copy_blind_test_quick_start(package_dir)
+    _write_runtime_ready_start_here(package_dir, version, offline_status)
     _write_commercial_manifest(package_dir, version, offline_status, component_status)
     _patch_install_manifest(package_dir / "install_manifest.json", offline_status)
     archive = _zip_package(package_dir)
@@ -156,6 +158,45 @@ setlocal
 cd /d "%~dp0"
 call run_cli.bat validate-offline-ocr --app-dir "."
 exit /b
+""",
+        encoding="utf-8",
+    )
+
+
+def _copy_blind_test_quick_start(package_dir: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2]
+    source = source_root / "docs" / "BLIND_TEST_QUICK_START.md"
+    if source.exists():
+        shutil.copy2(source, package_dir / "BLIND_TEST_QUICK_START.md")
+
+
+def _write_runtime_ready_start_here(package_dir: Path, version: str, offline_status: str) -> None:
+    package_dir.joinpath("START_HERE.md").write_text(
+        f"""# 文档安全脱敏助手 runtime-ready 盲测包
+
+版本: {version}
+离线状态: {offline_status}
+
+**盲测人员请优先阅读 `BLIND_TEST_QUICK_START.md`**，该文件是单一上手入口。
+
+验收顺序:
+
+1. 解压到短路径（如 `D:\\DRA`），不要解压到深层中文目录或网络盘。
+2. 首次运行 `app\\install_offline_ocr.bat` 安装 OCR 引擎依赖（约 2 分钟，仅首次需要）。
+3. 运行 `app\\validate_offline_ocr.bat` 确认 OCR 已启用。
+4. 双击 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
+5. 如需安装预检，运行 `app\\install_local.bat`。
+6. 运行 `app\\run_sample_self_test.bat`，期望输出 `SAMPLE_SELF_TEST_OK`。
+7. 如需执行完整验收自检，运行 `app\\run_acceptance_smoke.bat`。
+
+边界:
+
+- 当前是可解压运行的完整离线 runtime-ready 盲测包，不是正式 MSI/EXE 安装器。
+- Python 运行时已内置在 `app\\runtime\\python\\`，客户电脑无需另行安装 Python。
+- OCR 引擎依赖已内置在 `app\\ocr_engines\\wheelhouse\\`，需运行 `app\\install_offline_ocr.bat` 安装后启用。
+- Office/旧版文档转换组件已内置在 `app\\office_runtime\\`。
+- 本地映射表只留在客户本机，不进入上传包。
+- `commercial_release_manifest.json` 和 `install_manifest.json` 是组件完整性审计入口。
 """,
         encoding="utf-8",
     )

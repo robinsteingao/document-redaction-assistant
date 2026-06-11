@@ -475,6 +475,10 @@ python -m redaction_assistant.cli restore `
   --output .\restored_report.md
 ```
 
+## 盲测人员快速上手
+
+**不了解项目源码结构的测试人员，请直接阅读 `BLIND_TEST_QUICK_START.md`**。该文件是唯一入口，按顺序执行即可完成盲测。
+
 ## 后续版本
 
 - M24: `.xls/.wps` 真实样本专项验证、真正的文件/文件夹选择入口、完整 OCR 的暂停/续跑/失败重试。

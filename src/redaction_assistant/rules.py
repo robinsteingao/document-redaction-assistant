@@ -126,7 +126,8 @@ def amount_range(value: str) -> str:
         number /= 10000
         unit = "万元"
     elif "$" in value or "usd" in normalized or "dollar" in normalized:
-        unit = "外币金额"
+        number = number * 7.2 / 10000
+        unit = "万元"
     elif "rmb" in normalized or "cny" in normalized:
         number /= 10000
         unit = "万元"

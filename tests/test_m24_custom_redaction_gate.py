@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
 from redaction_assistant.redactor import candidate_id_for
-from redaction_assistant.rules import Entity, detect_entities
+from redaction_assistant.rules import Entity, amount_range, detect_entities
 from redaction_assistant.workflow import build_redaction_package, write_package
 from redaction_assistant.review import export_review_workspace
 
@@ -237,6 +237,13 @@ class M24CustomRedactionGateTest(unittest.TestCase):
         self.assertIn("confirmDegradationRisk", index)
         self.assertIn("上传前评价影响门禁", index)
         self.assertIn("客户自定义脱敏决策", index)
+
+    def test_amount_range_foreign_currency_conversion(self):
+        self.assertEqual(amount_range("$1234"), "低于10万")
+        self.assertEqual(amount_range("$50000"), "10万至50万")
+        self.assertEqual(amount_range("$100"), "低于10万")
+        self.assertEqual(amount_range("USD 1234"), "低于10万")
+        self.assertEqual(amount_range("50000 dollars"), "10万至50万")
 
 
 def _write_text(text: str) -> Path:
