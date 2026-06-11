@@ -42,7 +42,7 @@ class M4TrialPackageTests(unittest.TestCase):
         self.assertIn("downloadDecisions", html)
         self.assertIn("review_decisions.json", html)
         self.assertIn("textarea", html)
-        self.assertIn("复核决策 JSON", html)
+        self.assertIn("复核选择文件（JSON）", html)
 
     def test_trial_package_contains_required_customer_files(self):
         with tempfile.TemporaryDirectory() as td:

@@ -159,9 +159,12 @@ class M22UserBatchPDCATest(unittest.TestCase):
         self.assertIn("/start-build", index)
         self.assertIn("/job-status", index)
         self.assertIn("预检文件", index)
-        self.assertIn("处理进度", index)
+        self.assertIn("处理进度摘要", index)
         self.assertIn("文档安全脱敏助手输出", index)
         self.assertIn("outputs.output_dir", index)
+        self.assertIn("formatPlanResult", index)
+        self.assertIn("formatJobStatus", index)
+        self.assertIn("原始详情（供技术支持复制", index)
 
     def test_amount_range_hint_does_not_republish_original_amount_string(self):
         originals = ["3万元", "5万元", "10万元", "100万元"]

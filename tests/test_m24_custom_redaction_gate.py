@@ -235,8 +235,9 @@ class M24CustomRedactionGateTest(unittest.TestCase):
 
         self.assertIn("reviewDecisions", index)
         self.assertIn("confirmDegradationRisk", index)
-        self.assertIn("上传前评价影响门禁", index)
-        self.assertIn("客户自定义脱敏决策", index)
+        self.assertIn("评价影响提醒（生成前必看）", index)
+        self.assertIn("自定义字段处理方式", index)
+        self.assertIn("review_workspace.html", index)
 
     def test_amount_range_foreign_currency_conversion(self):
         self.assertEqual(amount_range("$1234"), "低于10万")

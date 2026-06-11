@@ -72,7 +72,7 @@ class M5PilotClosureTests(unittest.TestCase):
         self.assertIn("文档安全脱敏助手", html)
         self.assertIn("导入文件", html)
         self.assertIn("字段复核", html)
-        self.assertIn("生成上传包", html)
+        self.assertIn("生成结果包", html)
         self.assertEqual(cfg["version"], "0.5.0-m5")
         self.assertIn(status["status"], {"not_configured", "available"})
         self.assertFalse(status["required_for_text_pdf"])

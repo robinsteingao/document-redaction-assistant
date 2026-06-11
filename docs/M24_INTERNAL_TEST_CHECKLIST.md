@@ -31,7 +31,7 @@
 
 1. Python 环境：项目既有虚拟环境，确认可 `python -m pytest` 正常运行。
 2. 本地服务 / 桌面壳启动方式以 README 与桌面壳说明为准（桌面壳页面内引用 `app\start_local_service.bat` / `app\start_offline_app.bat`，服务默认 `http://127.0.0.1:8765`）。
-3. 桌面壳：打开生成的 `desktop_shell_<version>\index.html`，确认"上传前评价影响门禁"区块与"客户自定义脱敏决策 JSON"输入框可见。
+3. 桌面壳：打开生成的 `desktop_shell_<version>\index.html`，确认“评价影响提醒”区块与“自定义字段处理方式”输入框可见。
 4. 输出目录：相对路径会落到 `文档\文档安全脱敏助手输出\`，确认有写入权限。
 
 ---
@@ -83,7 +83,7 @@ Amount: 480000
 
 ## 5. 门禁专项用例
 
-复核决策的回路：**首次生成 → 打开 `review_workspace.html` → 编辑/导出 `review_decisions.json` → 粘贴回桌面壳"客户自定义脱敏决策 JSON" → 重跑**。
+复核选择的回路：**首次生成 → 打开 `review_workspace.html` → 编辑/导出 `review_decisions.json` → 用记事本打开并修改 → 粘贴回桌面壳“自定义字段处理方式” → 重跑**。
 
 | # | 操作 | 期望门禁结果 | 判定 |
 |---|---|---|---|

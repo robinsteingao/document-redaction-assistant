@@ -31,7 +31,7 @@ class M21UserTestGuidanceTests(unittest.TestCase):
         self.assertIn("projectAlias", index)
         self.assertIn("inputPaths", index)
         self.assertIn("outputDir", index)
-        self.assertIn("生成脱敏包", index)
+        self.assertIn("生成脱敏结果包", index)
         self.assertIn("runBuildPackage", index)
         self.assertIn("buildResult", index)
         self.assertIn("/plan-inputs", index)

@@ -31,6 +31,8 @@ def build_install_package(
 
     shutil.copytree(source_root / "src", app_dir / "src", ignore=_ignore_runtime_cache)
     _copy_optional(source_root / "README.md", package_dir / "README.md")
+    _copy_optional(source_root / "使用必读.txt", package_dir / "使用必读.txt")
+    _copy_optional(source_root / "使用必读.doc", package_dir / "使用必读.doc")
     _copy_optional(source_root / "RELEASE_CHECKLIST.md", docs_dir / "RELEASE_CHECKLIST.md")
     if (source_root / "docs").exists():
         shutil.copytree(source_root / "docs", docs_dir / "release_notes", dirs_exist_ok=True)
@@ -77,6 +79,8 @@ def build_install_package(
         "runtime": "Python 3.10+ or bundled-compatible Python on customer PC",
         "service_url": service_url,
         "commands": {
+            "must_read_txt": "使用必读.txt",
+            "must_read_doc": "使用必读.doc",
             "sample_self_test": "app\\run_sample_self_test.bat",
             "runtime_preflight": "app\\check_runtime.bat",
             "local_install": "app\\install_local.bat",
@@ -372,9 +376,9 @@ def _start_here(version: str) -> str:
 
 版本: {version}
 
-本包用于最小安装验收：解压后不需要理解源码结构，优先运行 `app\\start_desktop_app.bat`、`app\\install_local.bat` 和 `app\\run_sample_self_test.bat`。
+本包用于最小安装验收：解压后不需要理解源码结构。请先阅读包根目录的 `使用必读.txt` 或 `使用必读.doc`，再运行 `app\\start_desktop_app.bat`、`app\\install_local.bat` 和 `app\\run_sample_self_test.bat`。
 
-如包根目录存在 `BLIND_TEST_QUICK_START.md`，盲测人员请优先阅读该文件；否则以本文件作为技术验收入口。
+如包根目录存在 `使用必读.txt` / `使用必读.doc`，普通用户请优先阅读；盲测人员也可参考 `BLIND_TEST_QUICK_START.md`；否则以本文件作为技术验收入口。
 
 验收顺序:
 

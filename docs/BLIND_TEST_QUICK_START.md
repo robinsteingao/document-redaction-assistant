@@ -12,8 +12,8 @@
 
 - 解析项目申报材料（Word / Excel / PDF / TXT）
 - 自动识别敏感字段（姓名、电话、邮箱、专利号、金额等）
-- 按默认规则脱敏，生成脱敏上传包
-- 检测脱敏是否会影响 STPE-AI 对项目的评价
+- 按默认规则脱敏，生成脱敏结果包（可交给 STPE-AI 沙箱导入）
+- 提醒脱敏选择是否可能影响 STPE-AI 对项目的评价
 - 生成复核工作区，供您逐项确认
 
 **关键安全边界**：所有处理在您本地完成，原始文件不会离开您的电脑。
@@ -130,26 +130,26 @@ D:\测试材料\技术指标.txt
    - 单个文件：`D:\测试材料\项目A申报书.docx`
    - 文件夹：`D:\测试材料`
 3. **点击"预检文件"**：查看哪些文件可处理、哪些需要转换
-4. **点击"开始生成脱敏包"**：等待处理完成
+4. **点击"开始生成脱敏结果包"**：等待处理完成
 5. **查看结果**：处理完成后，输出目录会生成以下文件
 
 ### 4.3 输出文件说明
 
 | 文件名 | 说明 |
 |--------|------|
-| `redaction_upload_package.json` | **脱敏上传包**（可发送给 STPE-AI） |
+| `redaction_upload_package.json` | **脱敏结果包**（可交给 STPE-AI 沙箱导入；不是原始文件） |
 | `local_mapping.private.json` | **本地映射表**（留在您电脑，用于还原） |
-| `redaction_review_report.md` | **脱敏审查报告**（含评价影响门禁结果） |
+| `redaction_review_report.md` | **脱敏审查报告**（含评价影响提醒结果） |
 | `review_workspace.html` | **复核工作区**（浏览器打开，逐项确认） |
 | `sandbox_import_package.json` | **沙箱导入包**（用于 STPE-AI 导入） |
 
 ---
 
-## 5. 评价影响门禁（M24 新功能）
+## 5. 评价影响提醒（M24 新功能）
 
-门禁回答的问题是：**"客户的脱敏选择，会不会削弱 STPE-AI 对该项目的评价？"**
+评价影响提醒回答的问题是：**"客户的脱敏选择，会不会削弱 STPE-AI 对该项目的评价？"** 这里的“提醒”不是审批结论，也不代表无隐私残留。
 
-### 5.1 门禁等级
+### 5.1 提醒等级
 
 | 等级 | 含义 | 您需要做什么 |
 |------|------|-------------|
@@ -157,25 +157,26 @@ D:\测试材料\技术指标.txt
 | `warning` | 有字段被保留（未脱敏），可能影响评价 | 查看报告，确认是否可接受 |
 | `blocked_requires_confirmation` | 客户强制脱敏了技术指标等关键字段，**会阻断评价** | 必须显式确认接受风险后才能继续 |
 
-### 5.2 如何查看门禁结果
+### 5.2 如何查看提醒结果
 
-打开 `redaction_review_report.md`，搜索"评价影响门禁"，查看 `overall_level`。
+打开 `redaction_review_report.md`，搜索“评价影响”或 `overall_level`。
 
-### 5.3 客户自定义脱敏决策
+### 5.3 自定义字段处理方式
 
 如果您需要修改默认脱敏策略：
 
 1. 打开 `review_workspace.html`
 2. 查看各字段的默认脱敏建议
 3. 导出 `review_decisions.json`
-4. 修改决策（将 `action` 改为 `keep` 或 `redact`，选择策略 `pseudonym` / `range` / `mask`）
-5. 将修改后的 JSON 粘贴到界面的"客户自定义脱敏决策 JSON"输入框
-6. 重新生成脱敏包
+4. 用“记事本”、Notepad++ 或 VS Code 打开该文件
+5. 修改处理方式：`action=keep` 表示保留原样，`action=redact` 表示隐藏；`strategy=pseudonym` 表示替换为假名，`range` 表示保留区间，`mask` 表示遮盖隐藏
+6. 将修改后的 JSON 粘贴到界面的“自定义字段处理方式（可选）”输入框
+7. 重新生成脱敏结果包
 
 **重要提示**：
 - 仅提交决策不会标记 `customer_confirmed=true`
 - 必须显式勾选"确认接受评价降级风险"才会记录确认
-- 强制脱敏技术指标且未确认风险 → 门禁等级为 `blocked_requires_confirmation`
+- 强制脱敏技术指标且未确认风险 → 提醒等级为 `blocked_requires_confirmation`
 
 ---
 
@@ -203,7 +204,7 @@ app\run_acceptance_smoke.bat
 2. **金额区间换算**：英文金额的区间换算可能与直觉有偏差，这是辅助估计，不作判定依据
 3. **原生文件选择器**：当前文件路径需手动输入，尚不支持系统文件选择对话框
 4. **`.xls/.wps` 格式**：旧版 Office 格式先尝试本地转换，转换失败的文件不会进入上传包
-5. **门禁是建议级**：门禁 `pass` 不等于"无隐私残留"，仅表示在已识别字段中未发现会阻断评价的强脱敏
+5. **评价影响提醒是建议级**：`pass` 不等于“无隐私残留”，仅表示在已识别字段中未发现会阻断评价的强脱敏
 
 ---
 
@@ -214,6 +215,8 @@ app\run_acceptance_smoke.bat
 | 提示 `Cannot find Python` | 确认解压路径不含空格和中文，重新解压到短路径 |
 | 提示 `DESKTOP_APP_START_FAILED` | 检查端口 8765 是否被占用，关闭其他服务后重试 |
 | OCR 安装失败 | 确认已运行 `install_offline_ocr.bat`，检查磁盘空间 |
+| 检查 OCR 显示“未配置 OCR 引擎” | 先运行 `app\install_offline_ocr.bat`，再运行 `app\validate_offline_ocr.bat`；非扫描件通常不受影响 |
+| 点击开始后显示 `the application cant be start,user installation couldn't be completed` | 关闭窗口后重新运行 `app\start_desktop_app.bat`；确认解压路径短、非网络盘，必要时右键以管理员身份运行 |
 | 浏览器未自动打开 | 手动访问 `http://127.0.0.1:8765` |
 | 处理大文件很慢 | 正常现象，PDF 和大型 Word 文件需要更多处理时间 |
 | 输出目录找不到 | 默认输出到 `文档\文档安全脱敏助手输出\`，检查用户文档目录 |
@@ -228,7 +231,7 @@ app\run_acceptance_smoke.bat
 测试编号: §X.X
 输入文件: [文件名/文本片段]
 使用的 review_decisions.json: [有/无]
-门禁结果:
+评价影响提醒结果:
   - overall_level: [pass/warning/blocked_requires_confirmation]
   - trl_impact: [none/low/medium/high]
   - benefit_impact: [none/low/medium/high]
@@ -242,9 +245,9 @@ app\run_acceptance_smoke.bat
 
 ## 10. 测试结论红线
 
-1. 门禁 `pass` **不能**向客户承诺"无隐私残留"或"评价不受影响"
+1. 评价影响提醒 `pass` **不能**向客户承诺“无隐私残留”或“评价不受影响”
 2. 本工具**不代表** STPE-AI 主系统评价规则、TRL 口径或 readiness 分值发生变化
-3. 门禁映射为**启发式**，未经真实项目真值校准；内测仅用于功能验证
+3. 评价影响提醒映射为**启发式**，未经真实项目真值校准；内测仅用于功能验证
 4. `.xls/.wps` 真实样本专项验证尚未完成，相关结论暂不外推
 
 ---

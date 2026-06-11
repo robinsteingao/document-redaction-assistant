@@ -1,0 +1,35 @@
+<html>
+<head><meta charset="utf-8"><title>文档安全脱敏助手 M24 使用必读</title></head>
+<body>
+<h1>文档安全脱敏助手 M24 使用必读</h1>
+<p><b>先看结论：</b>本工具在本机离线处理文件，原始文件不上传；普通用户优先双击 <code>app\start_desktop_app.bat</code> 打开界面；<code>local_mapping.private.json</code> 只留在本机，不要上传或外发。</p>
+<h2>首次部署流程</h2>
+<ol>
+<li>解压到短路径，例如 <code>D:\DRA</code> 或 <code>C:\DRA</code>。</li>
+<li>如包内提供 <code>app\install_offline_ocr.bat</code>，先双击安装 OCR 依赖。</li>
+<li>如包内提供 <code>app\validate_offline_ocr.bat</code>，再双击校验 OCR。</li>
+<li>双击 <code>app\start_desktop_app.bat</code>，等待浏览器自动打开。</li>
+<li>浏览器未自动打开时，手动访问 <code>http://127.0.0.1:8765</code>。</li>
+</ol>
+<h2>日常操作方法</h2>
+<ol>
+<li>填写项目代号。</li>
+<li>填写待处理文件或文件夹路径；每行一个文件，也可以填写文件夹做批量脱敏。</li>
+<li>点击“预检文件”，重点看可处理、需转换、跳过、暂不支持文件数和推荐 OCR 模式。</li>
+<li>点击“开始生成脱敏结果包”，等待处理状态完成。</li>
+<li>打开输出目录，查看 <code>redaction_upload_package.json</code>、<code>sandbox_import_package.json</code>、<code>redaction_review_report.md</code>、<code>review_workspace.html</code>。</li>
+</ol>
+<h2>复核选择文件怎么打开</h2>
+<p><code>review_decisions.json</code> 可用“记事本”、Notepad++、VS Code 打开。简单理解：<code>action=keep</code> 表示保留原样，<code>action=redact</code> 表示隐藏；<code>strategy=pseudonym</code> 表示替换为假名，<code>mask</code> 表示遮盖隐藏，<code>range</code> 表示保留区间。</p>
+<h2>常见报错处理</h2>
+<ul>
+<li>“未配置 OCR 引擎”：先运行 <code>app\install_offline_ocr.bat</code>，再运行 <code>app\validate_offline_ocr.bat</code>。非扫描件通常不受影响。</li>
+<li>“the application cant be start,user installation couldn't be completed”：关闭窗口后重新运行 <code>app\start_desktop_app.bat</code>，确认解压路径较短且不在网络盘；仍失败时以管理员身份运行并联系技术支持。</li>
+<li>“Failed to fetch / 本地服务未连接”：确认启动窗口未关闭，手动访问 <code>http://127.0.0.1:8765</code>，或运行 <code>app\start_local_service.bat</code> 后刷新。</li>
+</ul>
+<h2>批量脱敏</h2>
+<p>可直接填写文件夹路径进行批量处理。多个项目建议分项目分别运行，避免不同项目的本地映射表混在一起。</p>
+<h2>边界提醒</h2>
+<p>“评价影响提醒”只提示脱敏选择是否可能影响后续评价，不等于无隐私残留，也不等于 STPE-AI 最终评价一定不受影响。</p>
+</body>
+</html>

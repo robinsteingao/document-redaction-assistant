@@ -61,9 +61,9 @@ def _html(version: str, service_url: str | None) -> str:
     <div>原始文件不上传 | 映射表本地保存</div>
   </header>
   <section class="steps">
-    <div class="step"><b>导入文件</b>选择 DOCX、XLSX、DOC、XLS、WPS、文本 PDF 或样例目录。</div>
+    <div class="step"><b>导入文件</b>选择 DOCX、XLSX、DOC、XLS、WPS、文本 PDF，或直接填写文件夹做批量处理。</div>
     <div class="step"><b>字段复核</b>检查项目、单位、金额、专利和技术指标。</div>
-    <div class="step"><b>生成上传包</b>生成沙箱导入包和本地加密映射表。</div>
+    <div class="step"><b>生成结果包</b>生成可交给 STPE-AI 沙箱导入的结果文件，并在本机保存映射表。</div>
     <div class="step"><b>报告还原</b>评审后使用本地映射表还原报告。</div>
   </section>
   <section class="note">
@@ -73,7 +73,7 @@ def _html(version: str, service_url: str | None) -> str:
     <p>本页面绑定本地服务接口：<code>{service or '未配置，使用 CLI 模式'}</code></p>
   </section>
   <section class="tool">
-    <h2>生成脱敏上传包</h2>
+    <h2>生成脱敏结果包</h2>
     <div class="grid">
       <div>
         <label for="projectAlias">项目代号</label>
@@ -87,7 +87,7 @@ def _html(version: str, service_url: str | None) -> str:
     </div>
     <div class="grid">
       <div>
-        <label for="inputPaths">待处理文件或文件夹路径</label>
+        <label for="inputPaths">待处理文件或文件夹路径（支持批量）</label>
         <textarea id="inputPaths" placeholder="每行一个完整路径，可填写文件夹，例如 C:\\Users\\tester\\Desktop\\项目材料"></textarea>
       </div>
       <div>
@@ -101,23 +101,23 @@ def _html(version: str, service_url: str | None) -> str:
     </div>
     <div class="actions">
       <button onclick="runInputPlan()">预检文件</button>
-      <button onclick="startBuildJob()">开始生成脱敏包</button>
+      <button onclick="startBuildJob()">开始生成脱敏结果包</button>
       <button class="danger" onclick="cancelCurrentJob()">取消当前任务</button>
       <button class="secondary" onclick="retryCurrentJob()">重试失败任务</button>
     </div>
     <div class="gate">
-      <b>上传前评价影响门禁</b>
-      <p>客户可在生成前粘贴 <code>review_decisions.json</code>，自由选择字段 <code>keep/redact</code> 和 <code>pseudonym/mask/range</code> 策略。技术指标、验证信息、金额、专利等字段如被强脱敏，系统会在脱敏包中写入评价影响提示。</p>
-      <label for="reviewDecisions">客户自定义脱敏决策 JSON（可选）</label>
-      <textarea id="reviewDecisions" placeholder='例如：{{"候选字段ID":{{"action":"keep"}}}}。首次生成后可在 review_workspace.html 导出决策文件，再粘贴到此处重跑。'></textarea>
+      <b>评价影响提醒（生成前必看）</b>
+      <p>如需改默认处理方式，请先生成一次结果包，打开输出目录中的 <code>review_workspace.html</code>，导出 <code>review_decisions.json</code>，用记事本打开后按提示修改，再粘贴回下方重跑。技术指标、验证信息、金额、专利等关键字段如果被强制隐藏，可能影响后续评价。</p>
+      <label for="reviewDecisions">自定义字段处理方式（可选）</label>
+      <textarea id="reviewDecisions" placeholder='可粘贴 review_decisions.json 内容。简单理解：action=keep 表示保留原样；action=redact 表示隐藏；strategy 可选 pseudonym(假名)、mask(遮盖)、range(区间)。'></textarea>
       <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:10px;">
         <input id="confirmDegradationRisk" type="checkbox" style="width:auto;">
         我已确认：如强制脱敏高影响评价字段，可能导致 STPE-AI 评价降级，并接受该风险。
       </label>
     </div>
-    <h3>预检结果</h3>
+    <h3>预检结果摘要</h3>
     <pre id="planResult">等待预检</pre>
-    <h3>处理进度</h3>
+    <h3>处理进度摘要</h3>
     <pre id="buildResult">等待操作</pre>
   </section>
 </main>
@@ -159,10 +159,53 @@ function readPayload() {{
   const payload = {{project_alias_id, out, input_paths, ocr_mode, enable_conversion: true}};
   if (rawDecisions) {{
     try {{ payload.review_decisions = JSON.parse(rawDecisions); }}
-    catch (err) {{ throw new Error('客户自定义脱敏决策 JSON 格式错误：' + err.message); }}
+    catch (err) {{ throw new Error('自定义字段处理方式 JSON 格式错误：' + err.message); }}
   }}
   if (confirmedRisk) payload.customer_confirmed_degradation_risk = true;
   return payload;
+}}
+function rawDetails(body) {{
+  return '\\n\\n原始详情（供技术支持复制，可不用逐行理解）：\\n' + JSON.stringify(body, null, 2);
+}}
+function listCount(items) {{
+  return Array.isArray(items) ? items.length : 0;
+}}
+function formatPlanResult(body) {{
+  if (!body || body.success === false) {{
+    return '预检失败：' + ((body && body.error) || '未知错误') + rawDetails(body || {{}});
+  }}
+  const r = body.result || {{}};
+  const modes = Array.isArray(r.recommended_ocr_modes) ? r.recommended_ocr_modes.join('、') : '按默认设置';
+  const lines = [
+    '预检完成，请重点看下面几项：',
+    '可直接处理文件数：' + (r.processable_count || 0),
+    '需先转换文件数：' + (r.convertible_count || 0),
+    '跳过文件数：' + (r.skipped_count || 0),
+    '暂不支持文件数：' + (r.unsupported_count || 0),
+    '推荐 OCR 模式：' + modes
+  ];
+  if (listCount(r.convertible_files)) lines.push('提示：发现旧版 Office/WPS 文件，系统会先尝试本地转换。');
+  if (listCount(r.skipped_files)) lines.push('提示：有文件被跳过，请在原始详情中查看文件名和原因。');
+  return lines.join('\\n') + rawDetails(body);
+}}
+function formatJobStatus(body) {{
+  if (!body || body.success === false) {{
+    return '任务失败：' + ((body && body.error) || '未知错误') + rawDetails(body || {{}});
+  }}
+  const r = body.result || {{}};
+  const progress = r.progress || {{}};
+  const outputs = r.outputs || {{}};
+  const lines = [
+    '任务状态：' + (r.status || '未知'),
+    '任务编号：' + (r.job_id || currentJobId || '未返回'),
+    '处理进度：' + (progress.current || 0) + '/' + (progress.total || 0),
+    '当前文件：' + (progress.file_name || '暂无'),
+    '输出目录：' + (outputs.output_dir || r.output_dir || '完成后显示'),
+    '错误提示：' + (r.error || '无')
+  ];
+  if (outputs.package) lines.push('结果包文件：' + outputs.package);
+  if (outputs.sandbox_import_package) lines.push('沙箱导入文件：' + outputs.sandbox_import_package);
+  return lines.join('\\n') + rawDetails(body);
 }}
 async function runInputPlan() {{
   const el = document.getElementById('planResult');
@@ -179,7 +222,7 @@ async function runInputPlan() {{
   el.textContent = '正在预检文件...';
   try {{
     const body = await postJson('/plan-inputs', payload);
-    el.textContent = JSON.stringify(body, null, 2);
+    el.textContent = formatPlanResult(body);
   }} catch (err) {{
     el.textContent = localServiceHelp(err);
   }}
@@ -199,7 +242,7 @@ async function startBuildJob() {{
   el.textContent = '正在创建后台任务...';
   try {{
     const body = await postJson('/start-build', payload);
-    el.textContent = JSON.stringify(body, null, 2);
+    el.textContent = formatJobStatus(body);
     if (body.success && body.result && body.result.job_id) {{
       currentJobId = body.result.job_id;
       pollJob(body.result.job_id);
@@ -213,7 +256,7 @@ async function pollJob(jobId) {{
   for (;;) {{
     const res = await fetch(serviceUrl + '/job-status?job_id=' + encodeURIComponent(jobId));
     const body = await res.json();
-    el.textContent = JSON.stringify(body, null, 2);
+    el.textContent = formatJobStatus(body);
     const status = body.result && body.result.status;
     if (status === 'completed' || status === 'failed' || status === 'cancelled') {{
       return;
@@ -232,7 +275,7 @@ async function cancelCurrentJob() {{
   }}
   try {{
     const body = await postJson('/cancel-job', {{job_id: currentJobId}});
-    el.textContent = JSON.stringify(body, null, 2);
+    el.textContent = formatJobStatus(body);
   }} catch (err) {{
     el.textContent = localServiceHelp(err);
   }}
@@ -245,7 +288,7 @@ async function retryCurrentJob() {{
   }}
   try {{
     const body = await postJson('/retry-job', {{job_id: currentJobId}});
-    el.textContent = JSON.stringify(body, null, 2);
+    el.textContent = formatJobStatus(body);
     if (body.success && body.result && body.result.job_id) {{
       currentJobId = body.result.job_id;
       pollJob(currentJobId);

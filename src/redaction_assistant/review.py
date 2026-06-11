@@ -137,16 +137,65 @@ def _review_hint(kind: str, strategy: str) -> str:
     return "请复核是否需要脱敏。"
 
 
+KIND_LABELS = {
+    "amount": "金额信息",
+    "technical_metric": "技术指标",
+    "validation_evidence": "验证/试验信息",
+    "project_name": "项目名称",
+    "organization": "单位名称",
+    "contract_id": "合同编号",
+    "phone": "联系电话",
+    "email": "电子邮箱",
+    "patent_id": "专利/知识产权编号",
+    "person": "人员姓名",
+    "software_copyright": "软件著作权编号",
+    "technical_term": "技术术语",
+}
+
+STRATEGY_LABELS = {
+    "pseudonym": "替换为假名",
+    "mask": "遮盖隐藏",
+    "range": "保留区间",
+    "keep": "保留原样",
+}
+
+IMPACT_LABELS = {
+    "none": "无明显影响",
+    "low": "低影响",
+    "medium": "中等影响",
+    "high": "高影响",
+}
+
+
+def _kind_label(kind: Any) -> str:
+    text = str(kind or "")
+    return KIND_LABELS.get(text, text or "未分类字段")
+
+
+def _strategy_label(strategy: Any) -> str:
+    text = str(strategy or "")
+    return STRATEGY_LABELS.get(text, text or "按默认方式处理")
+
+
+def _impact_label(level: Any) -> str:
+    text = str(level or "")
+    return IMPACT_LABELS.get(text, text or "需人工判断")
+
+
+def _yes_no(value: Any) -> str:
+    return "是" if value is True else "否" if value is False else str(value or "未返回")
+
+
 def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], preview: dict[str, Any]) -> str:
     rows = []
     for item in candidates.get("items", []):
         rows.append(
             "<tr>"
-            f"<td>{escape(str(item.get('kind') or ''))}</td>"
+            f"<td>{escape(_kind_label(item.get('kind')))}</td>"
             f"<td>{escape(str(item.get('placeholder') or ''))}</td>"
-            f"<td>{escape(str(item.get('strategy') or ''))}</td>"
+            f"<td>{escape(_strategy_label(item.get('strategy')))}</td>"
             f"<td>{escape(str(item.get('preservation_value') or ''))}</td>"
-            f"<td>{escape(str(item.get('impact_level') or ''))}</td>"
+            f"<td>{escape(_impact_label(item.get('impact_level')))}</td>"
             f"<td>{escape(str(item.get('impact_message') or ''))}</td>"
             "</tr>"
         )
@@ -180,18 +229,18 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
 <body>
 <main>
   <h1>字段复核</h1>
-  <p>项目代号：{escape(str(package.get("project_alias_id") or ""))}</p>
+    <p>项目代号：{escape(str(package.get("project_alias_id") or ""))}</p>
   <div class="summary">
     <div class="metric">识别字段<strong>{len(candidates.get("items", []))}</strong></div>
-    <div class="metric">映射上传<strong>{escape(str(package.get("redaction_policy", {}).get("mapping_uploaded")))}</strong></div>
-    <div class="metric">TRL因子<strong>{escape(str(package.get("analysis_preservation_flags", {}).get("trl_factors_preserved")))}</strong></div>
-    <div class="metric">效益因子<strong>{escape(str(package.get("analysis_preservation_flags", {}).get("benefit_factors_preserved")))}</strong></div>
+    <div class="metric">映射表是否上传<strong>{escape(_yes_no(package.get("redaction_policy", {}).get("mapping_uploaded")))}</strong></div>
+    <div class="metric">技术评价信息是否保留<strong>{escape(_yes_no(package.get("analysis_preservation_flags", {}).get("trl_factors_preserved")))}</strong></div>
+    <div class="metric">效益评价信息是否保留<strong>{escape(_yes_no(package.get("analysis_preservation_flags", {}).get("benefit_factors_preserved")))}</strong></div>
   </div>
   <section>
     <h2>候选字段</h2>
-    <p>本页可用于本地复核。需要生成决策文件时，可在下方文本框编辑 JSON 后保存为 <code>review_decisions.json</code>，再由命令行重新生成上传包。</p>
+    <p>本页可用于本地复核。需要调整处理方式时，可点击下方“导出复核选择文件”，用记事本打开 <code>review_decisions.json</code>，按说明修改后粘贴回产品界面的“自定义字段处理方式”。</p>
     <table>
-      <thead><tr><th>类型</th><th>占位符</th><th>策略</th><th>保真值</th><th>影响等级</th><th>评价影响提示</th></tr></thead>
+      <thead><tr><th>字段类别</th><th>脱敏显示名</th><th>处理方式</th><th>保留的评价信息</th><th>影响程度</th><th>评价影响提示</th></tr></thead>
       <tbody>{''.join(rows)}</tbody>
     </table>
   </section>
@@ -207,9 +256,9 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
     </div>
   </section>
   <section>
-    <h2>复核决策 JSON</h2>
+    <h2>复核选择文件（JSON）</h2>
     <textarea id="decisions" style="width:100%;min-height:150px;border:1px solid var(--line);border-radius:8px;padding:12px;">{escape(_default_decisions_json(candidates))}</textarea>
-    <p><button onclick="downloadDecisions()" style="padding:9px 14px;border:0;border-radius:6px;background:var(--accent);color:white;">导出决策文件</button></p>
+    <p><button onclick="downloadDecisions()" style="padding:9px 14px;border:0;border-radius:6px;background:var(--accent);color:white;">导出复核选择文件</button></p>
   </section>
 </main>
 <script>
