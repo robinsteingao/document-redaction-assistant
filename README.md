@@ -89,6 +89,8 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 
 ## 快速开始
 
+> 说明：GitHub 仓库发布的是源码版，默认不内置 OCR 模型、Python 运行时、企业离线安装包或 `.release*` 快照。因此仓库体积较小是正常现象。扫描 PDF/图片 OCR 需要按 `docs/INSTALL_AND_OCR.md` 另行安装本地 OCR 依赖。
+
 源码目录直接试用时，优先使用 `run_cli.bat`：
 
 ```powershell
@@ -112,6 +114,8 @@ python -m redaction_assistant.cli build-package `
 ```powershell
 python -m redaction_assistant.cli open-source-preflight --root .
 ```
+
+更多安装、运行环境和 OCR 依赖说明见：[`docs/INSTALL_AND_OCR.md`](docs/INSTALL_AND_OCR.md)。
 
 下方 M1-M24 记录保留了从原型到产品化能力的演进过程，便于了解每一阶段新增了哪些功能。
 

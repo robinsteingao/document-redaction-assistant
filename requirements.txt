@@ -1,0 +1,6 @@
+# Core source edition dependencies
+#
+# The current source edition is intentionally lightweight and uses the
+# Python standard library for the baseline text/DOCX/XLSX/text-PDF workflow.
+# Optional OCR dependencies are listed in requirements-ocr-rapidocr.txt and
+# requirements-ocr-paddle.txt.

@@ -1,0 +1,5 @@
+# Recommended local OCR stack for scanned PDFs/images.
+# Install only when OCR is needed.
+rapidocr-onnxruntime
+pypdfium2
+Pillow

@@ -1,0 +1,7 @@
+# Optional heavier OCR stack.
+# PaddleOCR/PaddlePaddle wheels are platform-specific; follow PaddleOCR's
+# official installation notes if pip resolution fails on your machine.
+paddleocr
+paddlepaddle
+pypdfium2
+Pillow
