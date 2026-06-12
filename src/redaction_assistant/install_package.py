@@ -52,6 +52,7 @@ def build_install_package(
     _write(app_dir / "run_cli.bat", _run_cli_bat())
     _write(app_dir / "start_desktop_app.bat", _start_desktop_app_bat())
     _write(app_dir / "start_local_service.bat", _start_service_bat())
+    _write(app_dir / "register_community.bat", _register_community_bat())
     _write(app_dir / "run_sample_self_test.bat", _sample_self_test_bat())
     _write(app_dir / "check_runtime.bat", _check_runtime_bat())
     _write(app_dir / "install_local.bat", _install_local_bat())
@@ -83,6 +84,7 @@ def build_install_package(
             "must_read_doc": "使用必读.doc",
             "sample_self_test": "app\\run_sample_self_test.bat",
             "runtime_preflight": "app\\check_runtime.bat",
+            "registration": "app\\register_community.bat",
             "local_install": "app\\install_local.bat",
             "local_license": "app\\activate_local_license.bat",
             "rules_update": "app\\apply_rules_update.bat",
@@ -123,6 +125,7 @@ def build_install_package(
             "rules_update_manifest",
             "ocr_engine_bundle_manifest",
             "sample_self_test",
+            "registration_trial_gate",
             "installer_shell",
             "customer_acceptance_package",
             "pilot_operations",
@@ -165,6 +168,7 @@ setlocal
 set "APP_DIR=%~dp0"
 set "PYTHONPATH=%APP_DIR%src"
 set "EMBEDDED_PY=%APP_DIR%runtime\\python\\python.exe"
+if not defined DRA_REGISTRATION_DIR set "DRA_REGISTRATION_DIR=%APP_DIR%..\\registration"
 
 if exist "%APP_DIR%ocr_engines\\offline_ocr_installed.marker.json" (
   if exist "%APP_DIR%ocr_engines\\offline_ocr_env.bat" (
@@ -204,6 +208,7 @@ def _start_service_bat() -> str:
     return """@echo off
 setlocal
 cd /d "%~dp0"
+set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
 call run_cli.bat serve-local --host 127.0.0.1 --port 8765
 """
 
@@ -212,6 +217,7 @@ def _start_desktop_app_bat() -> str:
     return """@echo off
 setlocal
 cd /d "%~dp0"
+set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
 rem launch-desktop-app starts the local service and opens desktop_shell\\index.html
 call run_cli.bat launch-desktop-app --app-dir "." --host 127.0.0.1 --port 8765 --wait-seconds 12
 if errorlevel 1 (
@@ -223,6 +229,28 @@ if errorlevel 1 (
 """
 
 
+def _register_community_bat() -> str:
+    return """@echo off
+setlocal
+cd /d "%~dp0"
+set "EMAIL=%~1"
+if "%EMAIL%"=="" (
+  echo 请输入注册邮箱。个人版注册费用为每年80元，注册申请生成后可先试用50个文件。
+  set /p EMAIL=注册邮箱:
+)
+if "%EMAIL%"=="" (
+  echo REGISTRATION_EMAIL_REQUIRED
+  exit /b 2
+)
+call run_cli.bat registration-request --edition community --email "%EMAIL%" --out "..\\registration"
+if errorlevel 1 exit /b 1
+echo REGISTRATION_REQUEST_CREATED
+echo 注册申请目录: %~dp0..\\registration
+echo 请按 registration_mailto.txt 提示联系作者获取年度授权 license.json（个人版80元/年）。
+exit /b
+"""
+
+
 def _sample_self_test_bat() -> str:
     return """@echo off
 setlocal
@@ -230,7 +258,9 @@ cd /d "%~dp0"
 if not exist "..\\generated" mkdir "..\\generated"
 call check_runtime.bat
 if errorlevel 1 exit /b 1
-call run_cli.bat batch-build --input-root "..\\sample_data" --out "..\\generated\\sample_out" --mapping-passphrase "sample-local-passphrase"
+call run_cli.bat registration-request --edition community --email "sample@example.com" --out "..\\generated\\sample_registration"
+if errorlevel 1 exit /b 1
+call run_cli.bat batch-build --input-root "..\\sample_data" --out "..\\generated\\sample_out" --mapping-passphrase "sample-local-passphrase" --registration-dir "..\\generated\\sample_registration"
 if errorlevel 1 exit /b 1
 call run_cli.bat ocr-status
 if errorlevel 1 exit /b 1
@@ -383,18 +413,19 @@ def _start_here(version: str) -> str:
 验收顺序:
 
 1. 双击或在 PowerShell 中运行 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
-2. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json` 并校验本地授权。
-3. 运行 `app\\run_sample_self_test.bat`。
-4. 查看 `generated\\sample_out\\batch_manifest.json` 是否生成。
-5. 如需单独测试本地服务，运行 `app\\start_local_service.bat`，再在桌面壳中检查 OCR。
-6. 如需应用规则更新包，运行 `app\\apply_rules_update.bat 更新包目录`。
-7. 如需落盘离线 Python 运行时，运行 `app\\stage_python_runtime.bat python.exe路径`。
-8. 如需登记 OCR 离线依赖包，运行 `app\\build_ocr_wheelhouse.bat wheelhouse目录`。
-9. 如需校验 OCR 离线依赖包，运行 `app\\validate_ocr_package.bat`。
-10. 如需演示报告下载与本地还原，运行 `app\\build_report_delivery_demo.bat`。
-11. 如需生成试点问题台账，运行 `app\\record_pilot_feedback.bat`。
-12. 如需生成生产沙箱联调配置，运行 `app\\build_production_sandbox_config.bat`。
-13. 如需执行完整验收自检，运行 `app\\run_acceptance_smoke.bat`。
+2. 首次正式处理文件前，运行 `app\\register_community.bat` 并填写邮箱。个人版注册费用为 **80元/年**；生成注册申请后可先试用 50 个文件。
+3. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json` 并校验本地授权。
+4. 运行 `app\\run_sample_self_test.bat`。
+5. 查看 `generated\\sample_out\\batch_manifest.json` 是否生成。
+6. 如需单独测试本地服务，运行 `app\\start_local_service.bat`，再在桌面壳中检查 OCR。
+7. 如需应用规则更新包，运行 `app\\apply_rules_update.bat 更新包目录`。
+8. 如需落盘离线 Python 运行时，运行 `app\\stage_python_runtime.bat python.exe路径`。
+9. 如需登记 OCR 离线依赖包，运行 `app\\build_ocr_wheelhouse.bat wheelhouse目录`。
+10. 如需校验 OCR 离线依赖包，运行 `app\\validate_ocr_package.bat`。
+11. 如需演示报告下载与本地还原，运行 `app\\build_report_delivery_demo.bat`。
+12. 如需生成试点问题台账，运行 `app\\record_pilot_feedback.bat`。
+13. 如需生成生产沙箱联调配置，运行 `app\\build_production_sandbox_config.bat`。
+14. 如需执行完整验收自检，运行 `app\\run_acceptance_smoke.bat`。
 
 边界:
 
