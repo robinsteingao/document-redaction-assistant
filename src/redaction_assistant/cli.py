@@ -29,6 +29,7 @@ from .production_sandbox import build_production_sandbox_config, validate_produc
 from .report_delivery import build_report_delivery_package
 from .runtime_preflight import run_runtime_preflight, write_runtime_preflight_report
 from .rules_update import apply_rules_update_package, validate_rules_update_package
+from .open_source_preflight import run_open_source_release_preflight
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -113,6 +114,10 @@ def main(argv: list[str] | None = None) -> int:
     preflight = sub.add_parser("runtime-preflight", help="Check local runtime readiness.")
     preflight.add_argument("--base-dir", default=".")
     preflight.add_argument("--output")
+
+    preflight_os = sub.add_parser("open-source-preflight", help="Run read-only preflight checks for open-source release readiness.")
+    preflight_os.add_argument("--root", default=".", help="Package root to scan (default: current directory)")
+    preflight_os.add_argument("--output", help="Optional output JSON file path; if omitted, prints JSON to stdout")
 
     license_write = sub.add_parser("write-license", help="Write a local trial license file.")
     license_write.add_argument("--output", required=True)
@@ -297,6 +302,18 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(json.dumps(run_runtime_preflight(args.base_dir), ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "open-source-preflight":
+        root = Path(args.root)
+        report = run_open_source_release_preflight(root)
+        if args.output:
+            path = Path(args.output)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"preflight_report: {path}")
+        else:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["status"] == "passed" else 1
 
     if args.command == "write-license":
         path = write_local_license(args.output, customer_name=args.customer_name, expires_on=args.expires_on)

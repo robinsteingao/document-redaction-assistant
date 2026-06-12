@@ -231,6 +231,15 @@ M24 增加客户自定义脱敏与评价影响门禁：
 - 复核工作区展示影响等级和评价影响提示，桌面壳提供“自定义字段处理方式”输入框。
 - 规则补齐联系人姓名、`CN` 格式专利号和英文金额标签识别。
 
+## M24.7 增强
+
+M24.7 新增开源前只读发布预检：
+
+- 检查 `README.md`、`LICENSE`、`PRIVACY.md`、`COMMERCIAL.md`、`DISCLAIMER.md` 和开源发布指南是否存在。
+- 检查 `.gitignore` 是否覆盖 `.release*`、`local_mapping.private*`、`trial_usage_*.json`、注册申请、`license.json` 和 `stpe_upload_package/` 等不应公开的本地输出。
+- 扫描发布范围内疑似私有映射、release 快照、密钥文件和常见 secret 赋值痕迹。
+- 预检只生成 JSON 结果，不删除、不移动、不重命名任何文件；正式开源仍需人工清单复核、法务审查和安全审计。
+
 ## 命令行用法
 
 源码目录直接试用时，优先使用 `run_cli.bat`，它会自动设置本地包路径:
@@ -260,6 +269,13 @@ python -m redaction_assistant.cli build-package `
   --review-decisions .\review_decisions.json `
   --out .\out `
   .\project.docx .\benefit.xlsx .\contract.pdf
+```
+
+开源前只读发布预检:
+
+```powershell
+python -m redaction_assistant.cli open-source-preflight --root .
+python -m redaction_assistant.cli open-source-preflight --root . --output .\open_source_preflight_report.json
 ```
 
 只生成复核候选工作区:
