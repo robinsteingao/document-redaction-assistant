@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
+from redaction_assistant.registration import build_registration_request, write_registration_request
 from redaction_assistant.redactor import candidate_id_for
 from redaction_assistant.rules import Entity, amount_range, detect_entities
 from redaction_assistant.workflow import build_redaction_package, write_package
@@ -175,12 +176,15 @@ class M24CustomRedactionGateTest(unittest.TestCase):
         metric = Entity("technical_metric", "96.5%", "技术指标", "keep")
         with tempfile.TemporaryDirectory() as td:
             source = Path(td) / "project.txt"
+            registration_dir = Path(td) / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             source.write_text("效率96.5%，试运行30天。", encoding="utf-8")
             response = handle_request({
                 "action": "build_package",
                 "files": [str(source)],
                 "project_alias_id": "M24-SERVICE",
                 "out": str(Path(td) / "out"),
+                "registration_dir": str(registration_dir),
                 "review_decisions": {candidate_id_for(metric): {"action": "redact", "strategy": "mask"}},
             })
 
@@ -194,12 +198,15 @@ class M24CustomRedactionGateTest(unittest.TestCase):
         metric = Entity("technical_metric", "96.5%", "技术指标", "keep")
         with tempfile.TemporaryDirectory() as td:
             source = Path(td) / "project.txt"
+            registration_dir = Path(td) / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             source.write_text("效率96.5%，试运行30天。", encoding="utf-8")
             response = handle_request({
                 "action": "build_package",
                 "files": [str(source)],
                 "project_alias_id": "M24-SERVICE-CONFIRMED",
                 "out": str(Path(td) / "out"),
+                "registration_dir": str(registration_dir),
                 "review_decisions": {candidate_id_for(metric): {"action": "redact", "strategy": "mask"}},
                 "customer_confirmed_degradation_risk": True,
             })
@@ -213,12 +220,15 @@ class M24CustomRedactionGateTest(unittest.TestCase):
         metric = Entity("technical_metric", "96.5%", "技术指标", "keep")
         with tempfile.TemporaryDirectory() as td:
             source = Path(td) / "project.txt"
+            registration_dir = Path(td) / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             source.write_text("效率96.5%，试运行30天。", encoding="utf-8")
             response = handle_request({
                 "action": "build_package",
                 "files": [str(source)],
                 "project_alias_id": "M24-SERVICE-STRING-FALSE",
                 "out": str(Path(td) / "out"),
+                "registration_dir": str(registration_dir),
                 "review_decisions": {candidate_id_for(metric): {"action": "redact", "strategy": "mask"}},
                 "customer_confirmed_degradation_risk": "false",
             })

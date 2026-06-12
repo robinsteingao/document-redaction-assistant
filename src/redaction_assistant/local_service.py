@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .office_converter import convert_legacy_office_files
 from .ocr_adapter import get_ocr_status
+from .registration import consume_trial_or_raise
 from .review import export_review_workspace, review_decisions_from_mapping
 from .sandbox import build_sandbox_import_package
 from .user_batch import collect_user_inputs, ocr_max_pages_for_mode
@@ -74,6 +75,8 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                     review_decisions=decisions,
                     customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                     ocr_mode=payload.get("ocr_mode"),
+                    registration_dir=payload.get("registration_dir"),
+                    edition=payload.get("edition") or "community",
                 )
             finally:
                 if payload.get("input_paths"):
@@ -197,6 +200,8 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
                 customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                 ocr_mode=payload.get("ocr_mode"),
                 progress_cb=progress,
+                registration_dir=payload.get("registration_dir"),
+                edition=payload.get("edition") or "community",
             )
         finally:
             _cleanup_conversion_workspace(prepared)
@@ -297,6 +302,8 @@ def _public_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "customer_confirmed_degradation_risk",
         "ocr_mode",
         "enable_conversion",
+        "registration_dir",
+        "edition",
     }
     return {key: value for key, value in payload.items() if key in allowed}
 
@@ -315,8 +322,11 @@ def _build_outputs(
     customer_confirmed_degradation_risk: bool = False,
     ocr_mode: str | None = None,
     progress_cb=None,
+    registration_dir: str | Path | None = None,
+    edition: str = "community",
 ) -> dict[str, Path]:
     output_dir = _prepare_output_dir(out, alias)
+    consume_trial_or_raise(len(files), edition=edition, registration_dir=registration_dir)
     package, mapping = build_redaction_package(
         files,
         project_alias_id=alias,

@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
+from redaction_assistant.registration import build_registration_request, write_registration_request
 from redaction_assistant.ocr_adapter import extract_text_with_ocr, get_ocr_status
 from redaction_assistant.workflow import build_redaction_package
 
@@ -109,6 +110,8 @@ class M6OcrAndComponentsTests(unittest.TestCase):
             root = Path(td)
             source = root / "input.txt"
             out = root / "out"
+            registration_dir = root / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             source.write_text("项目名称：配网智能监测项目。合同金额：350万元。技术指标：10kV试运行30天。", encoding="utf-8")
 
             status_response = handle_request({"action": "ocr_status"})
@@ -117,6 +120,7 @@ class M6OcrAndComponentsTests(unittest.TestCase):
                 "project_alias_id": "project_m6",
                 "files": [str(source)],
                 "out": str(out),
+                "registration_dir": str(registration_dir),
             })
 
             self.assertTrue(status_response["success"])

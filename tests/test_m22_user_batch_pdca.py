@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
+from redaction_assistant.registration import build_registration_request, write_registration_request
 from redaction_assistant.ocr_adapter import extract_text_with_ocr
 from redaction_assistant.rules import amount_range
 from redaction_assistant.user_batch import collect_user_inputs, ocr_max_pages_for_mode
@@ -91,6 +92,8 @@ class M22UserBatchPDCATest(unittest.TestCase):
             source.mkdir()
             (source / "project.txt").write_text("项目名称：南网示范项目\n合同金额：100万元", encoding="utf-8")
             out = root / "out"
+            registration_dir = root / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
 
             started = handle_request({
                 "action": "start_build_package",
@@ -98,6 +101,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
                 "project_alias_id": "M22-JOB",
                 "out": str(out),
                 "ocr_mode": "quick",
+                "registration_dir": str(registration_dir),
             })
             self.assertTrue(started["success"], started)
             job_id = started["result"]["job_id"]
@@ -123,6 +127,8 @@ class M22UserBatchPDCATest(unittest.TestCase):
             output_root = root / "user_documents_output"
             source.mkdir()
             (source / "project.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            registration_dir = root / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
 
             with patch.dict("os.environ", {"DRA_OUTPUT_ROOT": str(output_root)}):
                 response = handle_request({
@@ -131,6 +137,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
                     "project_alias_id": "M22-RELATIVE-OUT",
                     "out": "desktop_output",
                     "ocr_mode": "quick",
+                    "registration_dir": str(registration_dir),
                 })
 
             self.assertTrue(response["success"], response)

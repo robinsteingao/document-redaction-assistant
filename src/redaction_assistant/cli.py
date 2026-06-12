@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from .acceptance import run_acceptance_smoke
-from .batch import build_batch_packages
+from .batch import SUPPORTED_SUFFIXES, build_batch_packages
 from .commercial_package import build_commercial_install_package, validate_commercial_install_package
 from .crypto import decrypt_mapping_file, encrypt_mapping_file
 from .review import build_review_workspace, export_review_workspace, review_decisions_from_mapping
@@ -30,6 +31,14 @@ from .report_delivery import build_report_delivery_package
 from .runtime_preflight import run_runtime_preflight, write_runtime_preflight_report
 from .rules_update import apply_rules_update_package, validate_rules_update_package
 from .open_source_preflight import run_open_source_release_preflight
+from .registration import (
+    RegistrationRequiredError,
+    TrialLimitExceededError,
+    build_registration_request,
+    consume_trial_or_raise,
+    registration_status,
+    write_registration_request,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--customer-dictionary")
     build.add_argument("--review-decisions")
     build.add_argument("--customer-confirmed-degradation-risk", action="store_true")
+    build.add_argument("--registration-dir", help="Local registration directory; defaults to ~/.document_redaction_assistant")
+    build.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
     build.add_argument("files", nargs="+")
 
     review = sub.add_parser("review-workspace", help="Build local review candidates and HTML workspace.")
@@ -59,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     batch.add_argument("--input-root", required=True)
     batch.add_argument("--out", required=True)
     batch.add_argument("--mapping-passphrase")
+    batch.add_argument("--registration-dir", help="Local registration directory; defaults to ~/.document_redaction_assistant")
+    batch.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
 
     encrypt = sub.add_parser("encrypt-mapping", help="Encrypt and remove a local mapping JSON file.")
     encrypt.add_argument("--input", required=True)
@@ -127,6 +140,19 @@ def main(argv: list[str] | None = None) -> int:
     license_validate = sub.add_parser("validate-license", help="Validate a local license file.")
     license_validate.add_argument("--input", required=True)
 
+    registration = sub.add_parser("registration-request", help="Build a local registration request. Personal registration fee: 80 CNY/year.")
+    registration.add_argument("--out", required=True)
+    registration.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
+    registration.add_argument("--email", required=True)
+    registration.add_argument("--organization", default="")
+    registration.add_argument("--name", default="")
+    registration.add_argument("--phone", default="")
+    registration.add_argument("--use-case", default="")
+
+    trial_status = sub.add_parser("trial-status", help="Show local registration, trial quota and license status.")
+    trial_status.add_argument("--registration-dir")
+    trial_status.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
+
     rules_update = sub.add_parser("apply-rules-update", help="Validate and apply an offline rules update package.")
     rules_update.add_argument("--update-dir", required=True)
     rules_update.add_argument("--active-rules-dir", required=True)
@@ -184,6 +210,11 @@ def main(argv: list[str] | None = None) -> int:
         decisions = None
         if args.review_decisions:
             decisions = review_decisions_from_mapping(json.loads(Path(args.review_decisions).read_text(encoding="utf-8")))
+        try:
+            consume_trial_or_raise(len(args.files), edition=args.edition, registration_dir=args.registration_dir)
+        except (RegistrationRequiredError, TrialLimitExceededError) as exc:
+            print(str(exc))
+            return 1
         package, mapping = build_redaction_package(
             args.files,
             project_alias_id=args.project_alias_id,
@@ -221,6 +252,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "batch-build":
+        total_files = _count_batch_files(args.input_root)
+        try:
+            consume_trial_or_raise(total_files, edition=args.edition, registration_dir=args.registration_dir)
+        except (RegistrationRequiredError, TrialLimitExceededError) as exc:
+            print(str(exc))
+            return 1
         manifest = build_batch_packages(args.input_root, args.out, passphrase=args.mapping_passphrase)
         print(f"batch_manifest: {Path(args.out) / 'batch_manifest.json'}")
         print(f"project_count: {manifest['project_count']}")
@@ -316,6 +353,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "passed" else 1
 
     if args.command == "write-license":
+        if os.getenv("DRA_ENABLE_LICENSE_ISSUER") != "1":
+            print("write-license is disabled in the public build. 请联系作者获取年度授权 license.json（个人版80元/年）。")
+            return 1
         path = write_local_license(args.output, customer_name=args.customer_name, expires_on=args.expires_on)
         print(f"local_license: {path}")
         return 0
@@ -325,6 +365,26 @@ def main(argv: list[str] | None = None) -> int:
         result = validate_local_license(data)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["status"] == "valid" else 1
+
+    if args.command == "registration-request":
+        request = build_registration_request(
+            edition=args.edition,
+            email=args.email,
+            organization=args.organization,
+            name=args.name,
+            phone=args.phone,
+            use_case=args.use_case,
+        )
+        outputs = write_registration_request(args.out, request)
+        for name, path in outputs.items():
+            print(f"{name}: {path}")
+        print(f"annual_fee_cny: {request['annual_fee_cny']}")
+        print(f"trial_file_limit: {request['trial_file_limit']}")
+        return 0
+
+    if args.command == "trial-status":
+        print(json.dumps(registration_status(args.registration_dir, edition=args.edition), ensure_ascii=False, indent=2))
+        return 0
 
     if args.command == "validate-rules-update":
         result = validate_rules_update_package(args.update_dir)
@@ -400,6 +460,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["status"] == "started" else 1
 
     return 2
+
+
+def _count_batch_files(input_root: str | Path) -> int:
+    root = Path(input_root)
+    total = 0
+    for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        total += sum(1 for p in project_dir.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES)
+    return total
 
 
 if __name__ == "__main__":

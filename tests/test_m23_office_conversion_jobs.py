@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
+from redaction_assistant.registration import build_registration_request, write_registration_request
 from redaction_assistant.office_converter import convert_legacy_office_files
 from redaction_assistant.user_batch import collect_user_inputs
 
@@ -71,6 +72,8 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
             root = Path(td)
             source = root / "source"
             source.mkdir()
+            registration_dir = root / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             for idx in range(20):
                 (source / f"file_{idx:02d}.txt").write_text(f"项目名称：南网示范项目{idx}", encoding="utf-8")
 
@@ -89,6 +92,7 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
                     "project_alias_id": "M23-CANCEL",
                     "out": str(root / "out"),
                     "ocr_mode": "quick",
+                    "registration_dir": str(registration_dir),
                 })
                 self.assertTrue(started["success"], started)
                 job_id = started["result"]["job_id"]
@@ -110,6 +114,8 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
             source = root / "source"
             source.mkdir()
             (source / "project.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            registration_dir = root / "registration"
+            write_registration_request(registration_dir, build_registration_request(email="tester@example.com"))
             attempts = {"count": 0}
 
             def flaky_outputs(*args, **kwargs):
@@ -129,6 +135,7 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
                     "project_alias_id": "M23-RETRY",
                     "out": str(root / "out"),
                     "ocr_mode": "quick",
+                    "registration_dir": str(registration_dir),
                 })
                 job_id = started["result"]["job_id"]
                 failed = _wait_for_terminal(job_id)

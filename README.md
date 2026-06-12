@@ -91,11 +91,22 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 
 > 说明：GitHub 仓库发布的是源码版，默认不内置 OCR 模型、Python 运行时、企业离线安装包或 `.release*` 快照。因此仓库体积较小是正常现象。扫描 PDF/图片 OCR 需要按 `docs/INSTALL_AND_OCR.md` 另行安装本地 OCR 依赖。
 
+首次处理文件前，建议先生成本地注册申请。个人版注册费用按年度缴纳，当前为 **80 元/年**；生成注册申请后可先试用 **50 个文件**。超过试用额度后，软件会阻止继续生成脱敏包，并提示联系作者获取年度授权 `license.json`。
+
+```powershell
+python -m redaction_assistant.cli registration-request `
+  --email user@example.com `
+  --out .\registration
+
+python -m redaction_assistant.cli trial-status --registration-dir .\registration
+```
+
 源码目录直接试用时，优先使用 `run_cli.bat`：
 
 ```powershell
 .\run_cli.bat build-package `
   --project-alias-id demo-project `
+  --registration-dir .\registration `
   --out .\out `
   .\examples\sample_project.txt
 ```
@@ -105,6 +116,7 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 ```powershell
 python -m redaction_assistant.cli build-package `
   --project-alias-id demo-project `
+  --registration-dir .\registration `
   --out .\out `
   .\project.docx .\benefit.xlsx .\contract.pdf
 ```
@@ -356,6 +368,16 @@ M24.7 新增开源前只读发布预检：
 - 检查 `.gitignore` 是否覆盖 `.release*`、`local_mapping.private*`、`trial_usage_*.json`、注册申请、`license.json` 和 `stpe_upload_package/` 等不应公开的本地输出。
 - 扫描发布范围内疑似私有映射、release 快照、密钥文件和常见 secret 赋值痕迹。
 - 预检只生成 JSON 结果，不删除、不移动、不重命名任何文件；正式开源仍需人工清单复核、法务审查和安全审计。
+
+## M24.8 增强
+
+M24.8 补齐轻注册与试用额度门禁：
+
+- 个人社区版需先生成本地注册申请，注册申请不包含原始文档、本地映射表或脱敏正文。
+- 个人版注册费用按年度缴纳，当前为 **80 元/年**。
+- 注册后可先试用 **50 个文件**；超过额度后，`build-package` / `batch-build` / 本地服务生成包会阻止继续处理。
+- 导入有效 `license.json` 后可继续使用授权范围内能力。
+- 公开源码版不提供自助生成正式授权文件的入口，`write-license` 默认禁用，避免用户绕过注册授权流程。
 
 ## 命令行用法
 
