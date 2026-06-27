@@ -26,7 +26,7 @@ def run_acceptance_smoke(
     output.mkdir(parents=True, exist_ok=True)
     sample_files = _sample_files(package_root, output)
     package, mapping = build_redaction_package(sample_files, project_alias_id=project_alias_id)
-    outputs = write_package(output, package, mapping)
+    outputs = write_package(output, package, mapping, mapping_passphrase="acceptance-local-passphrase")
     report = _build_report(app, package, mapping, outputs)
     report_path = output / "acceptance_report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -57,7 +57,8 @@ def _build_report(app_dir: Path, package: dict[str, Any], mapping: dict[str, Any
         and redaction_policy.get("original_files_uploaded") is False
         and redaction_policy.get("mapping_uploaded") is False
         and Path(outputs["package"]).exists()
-        and Path(outputs["mapping"]).exists()
+        and Path(outputs["encrypted_mapping"]).exists()
+        and not (Path(outputs["encrypted_mapping"]).parent / "local_mapping.private.json").exists()
     )
     checks = {
         "commercial_package": _commercial_package_check(app_dir.parent),
@@ -73,7 +74,7 @@ def _build_report(app_dir: Path, package: dict[str, Any], mapping: dict[str, Any
         "redaction_package": {
             "passed": redaction_passed,
             "package": str(outputs["package"]),
-            "mapping": str(outputs["mapping"]),
+            "encrypted_mapping": str(outputs["encrypted_mapping"]),
             "source_file_count": len(package.get("source_file_manifest", [])),
             "block_count": len(blocks),
             "mapping_count": len(mapping.get("items", [])),

@@ -134,7 +134,7 @@ def build_install_package(
         ],
         "security_boundary": [
             "原始文件只在本地处理",
-            "local_mapping.private.json 不得上传",
+            "local_mapping.private.enc 仅本地保存，不得上传；加密口令由客户自行保存",
             "上传 STPE-AI 的文件应为 sandbox_import_package.json 或 redaction_upload_package.json",
         ],
     }
@@ -435,7 +435,7 @@ def _start_here(version: str) -> str:
 - OCR 插件边界见 `app\\rules\\ocr_plugin_manifest.json`。
 - 离线运行时边界见 `app\\runtime\\runtime_manifest.json`。
 - 本地授权文件见 `app\\license\\local_license.json`。
-- 本地映射表只留在客户本机，不进入上传包。
+- 本地映射表以 local_mapping.private.enc 加密保存在客户本机，不进入上传包。
 """
 
 

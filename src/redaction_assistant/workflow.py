@@ -10,6 +10,7 @@ from .parsers import parse_file
 from .redactor import build_mapping, public_mapping_stats, redact_text, restore_text
 from .rules import contains_technical_signal, detect_entities_with_dictionary
 from .impact import build_redaction_impact_summary
+from .crypto import encrypt_mapping_file
 
 
 def build_redaction_package(
@@ -123,7 +124,13 @@ def _ocr_blocks_for_file(path: Path, manifest_item: dict[str, Any], *, ocr_max_p
     }]
 
 
-def write_package(output_dir: Path | str, package: dict[str, Any], mapping: dict[str, Any]) -> dict[str, Path]:
+def write_package(
+    output_dir: Path | str,
+    package: dict[str, Any],
+    mapping: dict[str, Any],
+    *,
+    mapping_passphrase: str | None = None,
+) -> dict[str, Path]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     package_path = output / "redaction_upload_package.json"
@@ -132,11 +139,19 @@ def write_package(output_dir: Path | str, package: dict[str, Any], mapping: dict
     package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8")
     mapping_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path.write_text(build_review_report(package), encoding="utf-8")
-    return {
+    outputs = {
         "package": package_path,
-        "mapping": mapping_path,
         "review_report": report_path,
     }
+    if mapping_passphrase:
+        outputs["encrypted_mapping"] = encrypt_mapping_file(
+            mapping_path,
+            output / "local_mapping.private.enc",
+            passphrase=mapping_passphrase,
+        )
+    else:
+        outputs["mapping"] = mapping_path
+    return outputs
 
 
 def build_restore_preview(package: dict[str, Any], mapping: dict[str, Any], limit: int = 600) -> dict[str, str]:

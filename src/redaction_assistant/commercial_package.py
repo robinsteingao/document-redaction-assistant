@@ -195,7 +195,7 @@ def _write_runtime_ready_start_here(package_dir: Path, version: str, offline_sta
 - Python 运行时已内置在 `app\\runtime\\python\\`，客户电脑无需另行安装 Python。
 - OCR 引擎依赖已内置在 `app\\ocr_engines\\wheelhouse\\`，需运行 `app\\install_offline_ocr.bat` 安装后启用。
 - Office/旧版文档转换组件已内置在 `app\\office_runtime\\`。
-- 本地映射表只留在客户本机，不进入上传包。
+- 本地映射表以 local_mapping.private.enc 加密保存在客户本机，不进入上传包。
 - `commercial_release_manifest.json` 和 `install_manifest.json` 是组件完整性审计入口。
 """,
         encoding="utf-8",
@@ -211,7 +211,7 @@ def _write_commercial_manifest(package_dir: Path, version: str, offline_status: 
         "components": component_status,
         "security_boundary": [
             "全部文档解析、OCR 和脱敏处理在客户本地执行",
-            "本地映射表不进入上传包",
+            "本地加密映射表不进入上传包",
             "生产沙箱只接收脱敏上传包",
         ],
     }

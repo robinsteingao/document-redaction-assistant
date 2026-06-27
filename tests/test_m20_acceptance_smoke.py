@@ -44,6 +44,9 @@ class M20AcceptanceSmokeTests(unittest.TestCase):
             self.assertFalse(report["checks"]["redaction_package"]["mapping_uploaded"])
             self.assertGreater(report["checks"]["redaction_package"]["block_count"], 0)
             self.assertTrue((output_dir / "redaction_upload_package.json").exists())
+            self.assertTrue((output_dir / "local_mapping.private.enc").exists())
+            self.assertFalse((output_dir / "local_mapping.private.json").exists())
+            self.assertIn("encrypted_mapping", report["checks"]["redaction_package"])
 
     def test_acceptance_smoke_fails_invalid_commercial_package(self):
         with tempfile.TemporaryDirectory() as td:

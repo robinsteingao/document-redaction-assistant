@@ -58,7 +58,7 @@ def _html(version: str, service_url: str | None) -> str:
 <main>
   <header>
     <div><h1>文档安全脱敏助手</h1><p>客户侧本地试点壳 v{version}</p></div>
-    <div>原始文件不上传 | 映射表本地保存</div>
+    <div>原始文件不上传 | 加密映射表本地保存</div>
   </header>
   <section class="steps">
     <div class="step"><b>导入文件</b>选择 DOCX、XLSX、DOC、XLS、WPS、文本 PDF，或直接填写文件夹做批量处理。</div>
@@ -96,7 +96,9 @@ def _html(version: str, service_url: str | None) -> str:
           <option value="quick" selected>快速预览：每个 PDF 先识别 1 页</option>
           <option value="full">完整处理：按本地默认页数识别</option>
         </select>
-        <p class="hint">旧版 DOC/XLS/WPS 会先尝试本地转换；转换失败的文件不会静默上传。</p>
+        <label for="mappingPassphrase">本地映射表加密口令</label>
+        <input id="mappingPassphrase" type="password" placeholder="请设置并自行保存，丢失后无法还原映射表">
+        <p class="hint">旧版 DOC/XLS/WPS 会先尝试本地转换；映射表将保存为 <code>local_mapping.private.enc</code>，不会保留明文映射表。</p>
       </div>
     </div>
     <div class="actions">
@@ -119,11 +121,17 @@ def _html(version: str, service_url: str | None) -> str:
     <pre id="planResult">等待预检</pre>
     <h3>处理进度摘要</h3>
     <pre id="buildResult">等待操作</pre>
+    <h3>技术支持包</h3>
+    <p class="hint">遇到问题时可生成技术支持包。支持包仅包含预检计数、任务状态和错误摘要，不包含原文、本地映射表或文件内容。</p>
+    <button class="secondary" onclick="buildSupportBundle()">生成技术支持包</button>
+    <pre id="supportBundleResult">等待生成</pre>
   </section>
 </main>
 <script>
 const serviceUrl = {json.dumps(service, ensure_ascii=False)};
 let currentJobId = null;
+let lastPlanBody = null;
+let lastJobBody = null;
 function localServiceHelp(err) {{
   return '本地服务未连接。请先运行 app\\\\start_offline_app.bat 或 app\\\\start_local_service.bat，确认服务地址为 ' + serviceUrl + '，然后重试。浏览器错误：' + err.message + '。常见原始提示包括 Failed to fetch。';
 }}
@@ -155,8 +163,9 @@ function readPayload() {{
   const project_alias_id = document.getElementById('projectAlias').value.trim();
   const ocr_mode = document.getElementById('ocrMode').value;
   const rawDecisions = document.getElementById('reviewDecisions').value.trim();
+  const mapping_passphrase = document.getElementById('mappingPassphrase').value.trim();
   const confirmedRisk = document.getElementById('confirmDegradationRisk').checked === true;
-  const payload = {{project_alias_id, out, input_paths, ocr_mode, enable_conversion: true}};
+  const payload = {{project_alias_id, out, input_paths, ocr_mode, mapping_passphrase, enable_conversion: true}};
   if (rawDecisions) {{
     try {{ payload.review_decisions = JSON.parse(rawDecisions); }}
     catch (err) {{ throw new Error('自定义字段处理方式 JSON 格式错误：' + err.message); }}
@@ -182,6 +191,7 @@ function formatPlanResult(body) {{
     '需先转换文件数：' + (r.convertible_count || 0),
     '跳过文件数：' + (r.skipped_count || 0),
     '暂不支持文件数：' + (r.unsupported_count || 0),
+    '路径不存在：' + (r.missing_count || 0),
     '推荐 OCR 模式：' + modes
   ];
   if (listCount(r.convertible_files)) lines.push('提示：发现旧版 Office/WPS 文件，系统会先尝试本地转换。');
@@ -201,8 +211,10 @@ function formatJobStatus(body) {{
     '处理进度：' + (progress.current || 0) + '/' + (progress.total || 0),
     '当前文件：' + (progress.file_name || '暂无'),
     '输出目录：' + (outputs.output_dir || r.output_dir || '完成后显示'),
+    '输出目录使用提示：可复制上方输出目录到资源管理器地址栏打开；如使用桌面壳打包版，也可点击系统提示中的打开输出目录按钮。',
     '错误提示：' + (r.error || '无')
   ];
+  if (outputs.encrypted_mapping) lines.push('加密映射表：' + outputs.encrypted_mapping);
   if (outputs.package) lines.push('结果包文件：' + outputs.package);
   if (outputs.sandbox_import_package) lines.push('沙箱导入文件：' + outputs.sandbox_import_package);
   return lines.join('\\n') + rawDetails(body);
@@ -222,6 +234,7 @@ async function runInputPlan() {{
   el.textContent = '正在预检文件...';
   try {{
     const body = await postJson('/plan-inputs', payload);
+    if (body.success) lastPlanBody = body;
     el.textContent = formatPlanResult(body);
   }} catch (err) {{
     el.textContent = localServiceHelp(err);
@@ -235,13 +248,14 @@ async function startBuildJob() {{
     el.textContent = '当前未配置本地服务，请使用命令行模式。';
     return;
   }}
-  if (!payload.project_alias_id || !payload.out || payload.input_paths.length === 0) {{
-    el.textContent = '请填写项目代号、输出目录，并至少输入一个文件或文件夹路径。';
+  if (!payload.project_alias_id || !payload.out || payload.input_paths.length === 0 || !payload.mapping_passphrase) {{
+    el.textContent = '请填写项目代号、输出目录、本地映射表加密口令，并至少输入一个文件或文件夹路径。';
     return;
   }}
   el.textContent = '正在创建后台任务...';
   try {{
     const body = await postJson('/start-build', payload);
+    if (body.success) lastJobBody = body;
     el.textContent = formatJobStatus(body);
     if (body.success && body.result && body.result.job_id) {{
       currentJobId = body.result.job_id;
@@ -256,6 +270,7 @@ async function pollJob(jobId) {{
   for (;;) {{
     const res = await fetch(serviceUrl + '/job-status?job_id=' + encodeURIComponent(jobId));
     const body = await res.json();
+    if (body.success) lastJobBody = body;
     el.textContent = formatJobStatus(body);
     const status = body.result && body.result.status;
     if (status === 'completed' || status === 'failed' || status === 'cancelled') {{
@@ -275,6 +290,7 @@ async function cancelCurrentJob() {{
   }}
   try {{
     const body = await postJson('/cancel-job', {{job_id: currentJobId}});
+    if (body.success) lastJobBody = body;
     el.textContent = formatJobStatus(body);
   }} catch (err) {{
     el.textContent = localServiceHelp(err);
@@ -288,11 +304,27 @@ async function retryCurrentJob() {{
   }}
   try {{
     const body = await postJson('/retry-job', {{job_id: currentJobId}});
+    if (body.success) lastJobBody = body;
     el.textContent = formatJobStatus(body);
     if (body.success && body.result && body.result.job_id) {{
       currentJobId = body.result.job_id;
       pollJob(currentJobId);
     }}
+  }} catch (err) {{
+    el.textContent = localServiceHelp(err);
+  }}
+}}
+async function buildSupportBundle() {{
+  const el = document.getElementById('supportBundleResult');
+  const payload = {{plan: lastPlanBody && lastPlanBody.result, job: lastJobBody && lastJobBody.result}};
+  if (!serviceUrl) {{
+    el.textContent = '当前未配置本地服务，请使用命令行模式。';
+    return;
+  }}
+  el.textContent = '正在生成技术支持包...';
+  try {{
+    const body = await postJson('/support-bundle', payload);
+    el.textContent = JSON.stringify(body.result || body, null, 2);
   }} catch (err) {{
     el.textContent = localServiceHelp(err);
   }}

@@ -186,14 +186,38 @@ def _yes_no(value: Any) -> str:
     return "是" if value is True else "否" if value is False else str(value or "未返回")
 
 
+def _decision_value(item: dict[str, Any]) -> str:
+    action = "keep" if item.get("strategy") == "keep" else "redact"
+    strategy = str(item.get("strategy") or "pseudonym")
+    return f"{action}|{strategy}"
+
+
+def _decision_options() -> str:
+    options = [
+        ("keep|keep", "保留原样"),
+        ("redact|mask", "遮盖隐藏"),
+        ("redact|pseudonym", "替换为假名"),
+        ("redact|range", "保留区间"),
+    ]
+    return "".join(f'<option value="{escape(value)}">{escape(label)}</option>' for value, label in options)
+
+
+def _impact_warning(item: dict[str, Any]) -> str:
+    if str(item.get("impact_level") or "") == "high":
+        return '<p class="risk">高影响字段：强制隐藏可能导致后续评价降级，请确认确需处理。</p>'
+    return ""
+
+
 def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], preview: dict[str, Any]) -> str:
     rows = []
     for item in candidates.get("items", []):
+        candidate_id = escape(str(item.get("candidate_id") or ""))
+        selected = _decision_value(item)
         rows.append(
-            "<tr>"
+            f"<tr data-candidate-id=\"{candidate_id}\">"
             f"<td>{escape(_kind_label(item.get('kind')))}</td>"
             f"<td>{escape(str(item.get('placeholder') or ''))}</td>"
-            f"<td>{escape(_strategy_label(item.get('strategy')))}</td>"
+            f"<td><select class=\"decision-select\" data-current=\"{escape(selected)}\" onchange=\"refreshDecisions()\">{_decision_options()}</select>{_impact_warning(item)}</td>"
             f"<td>{escape(str(item.get('preservation_value') or ''))}</td>"
             f"<td>{escape(_impact_label(item.get('impact_level')))}</td>"
             f"<td>{escape(str(item.get('impact_message') or ''))}</td>"
@@ -224,6 +248,8 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
     .preview {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }}
     pre {{ white-space:pre-wrap; background:#0f172a; color:#e2e8f0; padding:14px; border-radius:8px; min-height:130px; }}
     .warn li {{ color:var(--warn); margin:6px 0; }}
+    .decision-select {{ width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; font-family:inherit; }}
+    .risk {{ margin:6px 0 0; color:var(--warn); font-size:12px; line-height:1.5; }}
   </style>
 </head>
 <body>
@@ -262,7 +288,25 @@ def _render_review_html(package: dict[str, Any], candidates: dict[str, Any], pre
   </section>
 </main>
 <script>
+function refreshDecisions() {{
+  const decisions = {{}};
+  document.querySelectorAll('tr[data-candidate-id]').forEach(row => {{
+    const candidateId = row.getAttribute('data-candidate-id');
+    const select = row.querySelector('.decision-select');
+    if (!candidateId || !select) return;
+    const parts = select.value.split('|');
+    const action = parts[0] || 'redact';
+    const strategy = parts[1] || (action === 'keep' ? 'keep' : 'pseudonym');
+    decisions[candidateId] = {{action: action, strategy: strategy}};
+  }});
+  document.getElementById('decisions').value = JSON.stringify(decisions, null, 2);
+}}
+document.querySelectorAll('.decision-select').forEach(select => {{
+  const current = select.getAttribute('data-current');
+  if (current) select.value = current;
+}});
 function downloadDecisions() {{
+  refreshDecisions();
   const blob = new Blob([document.getElementById('decisions').value], {{type: 'application/json'}});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -271,6 +315,7 @@ function downloadDecisions() {{
   a.click();
   URL.revokeObjectURL(url);
 }}
+refreshDecisions();
 </script>
 </body>
 </html>"""

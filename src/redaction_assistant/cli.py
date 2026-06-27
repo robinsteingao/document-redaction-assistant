@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--customer-dictionary")
     build.add_argument("--review-decisions")
     build.add_argument("--customer-confirmed-degradation-risk", action="store_true")
+    build.add_argument("--mapping-passphrase", help="Encrypt local_mapping.private.json into local_mapping.private.enc and remove the plaintext mapping.")
     build.add_argument("--registration-dir", help="Local registration directory; defaults to ~/.document_redaction_assistant")
     build.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
     build.add_argument("files", nargs="+")
@@ -222,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
             review_decisions=decisions,
             customer_confirmed_degradation_risk=args.customer_confirmed_degradation_risk,
         )
-        outputs = write_package(args.out, package, mapping)
+        outputs = write_package(args.out, package, mapping, mapping_passphrase=args.mapping_passphrase)
         outputs.update(export_review_workspace(args.out, package, mapping))
         sandbox_path = Path(args.out) / "sandbox_import_package.json"
         sandbox_path.write_text(json.dumps(build_sandbox_import_package(package), ensure_ascii=False, indent=2), encoding="utf-8")

@@ -17,6 +17,7 @@ from .ocr_adapter import get_ocr_status
 from .registration import consume_trial_or_raise
 from .review import export_review_workspace, review_decisions_from_mapping
 from .sandbox import build_sandbox_import_package
+from .support_bundle import build_support_bundle
 from .user_batch import collect_user_inputs, ocr_max_pages_for_mode
 from .workflow import build_redaction_package, write_package
 
@@ -52,7 +53,9 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                 job = dict(_JOBS.get(str(job_id)) or {})
             if not job:
                 raise ValueError(f"job not found: {job_id}")
-            return {"success": True, "result": job}
+            return {"success": True, "result": _public_job_response(job)}
+        if action == "support_bundle":
+            return {"success": True, "result": build_support_bundle(payload.get("plan"), payload.get("job"))}
         if action == "build_package":
             files = payload.get("files") or []
             if payload.get("input_paths"):
@@ -75,6 +78,7 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                     review_decisions=decisions,
                     customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                     ocr_mode=payload.get("ocr_mode"),
+                    mapping_passphrase=payload.get("mapping_passphrase"),
                     registration_dir=payload.get("registration_dir"),
                     edition=payload.get("edition") or "community",
                 )
@@ -111,6 +115,7 @@ def _start_build_job(payload: dict[str, Any]) -> dict[str, Any]:
         "outputs": {},
         "requested_output_dir": str(out),
         "payload": _public_job_payload(payload),
+        "_retry_payload": dict(payload),
         "cancel_requested": False,
         "conversion_report": None,
         "error": None,
@@ -135,7 +140,7 @@ def _cancel_job(payload: dict[str, Any]) -> dict[str, Any]:
         if not job:
             raise ValueError(f"job not found: {job_id}")
         if job.get("status") in {"completed", "failed", "cancelled"}:
-            return {"success": True, "result": dict(job)}
+            return {"success": True, "result": _public_job_response(dict(job))}
         job["cancel_requested"] = True
     return {"success": True, "result": {"job_id": job_id, "status": "cancelling"}}
 
@@ -150,7 +155,7 @@ def _retry_job(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"job not found: {job_id}")
     if job.get("status") not in {"failed", "cancelled"}:
         raise ValueError("only failed or cancelled jobs can be retried")
-    retry_payload = dict(job.get("payload") or {})
+    retry_payload = dict(job.get("_retry_payload") or job.get("payload") or {})
     if not retry_payload:
         raise ValueError("job payload is not available for retry")
     return _start_build_job(retry_payload)
@@ -199,6 +204,7 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
                 review_decisions=decisions,
                 customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                 ocr_mode=payload.get("ocr_mode"),
+                mapping_passphrase=payload.get("mapping_passphrase"),
                 progress_cb=progress,
                 registration_dir=payload.get("registration_dir"),
                 edition=payload.get("edition") or "community",
@@ -301,11 +307,20 @@ def _public_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "review_decisions",
         "customer_confirmed_degradation_risk",
         "ocr_mode",
+        "mapping_passphrase",
         "enable_conversion",
         "registration_dir",
         "edition",
     }
-    return {key: value for key, value in payload.items() if key in allowed}
+    return {key: value for key, value in payload.items() if key in allowed and key != "mapping_passphrase"}
+
+
+def _public_job_response(job: dict[str, Any]) -> dict[str, Any]:
+    public = {key: value for key, value in job.items() if not str(key).startswith("_")}
+    payload = dict(public.get("payload") or {})
+    payload.pop("mapping_passphrase", None)
+    public["payload"] = payload
+    return public
 
 
 def _explicit_bool(value: Any) -> bool:
@@ -321,6 +336,7 @@ def _build_outputs(
     review_decisions: dict[str, dict[str, Any]] | None = None,
     customer_confirmed_degradation_risk: bool = False,
     ocr_mode: str | None = None,
+    mapping_passphrase: str | None = None,
     progress_cb=None,
     registration_dir: str | Path | None = None,
     edition: str = "community",
@@ -336,7 +352,7 @@ def _build_outputs(
         ocr_max_pages=ocr_max_pages_for_mode(ocr_mode),
         progress_cb=progress_cb,
     )
-    outputs = write_package(output_dir, package, mapping)
+    outputs = write_package(output_dir, package, mapping, mapping_passphrase=mapping_passphrase)
     outputs.update(export_review_workspace(output_dir, package, mapping))
     sandbox_path = output_dir / "sandbox_import_package.json"
     sandbox_path.write_text(
@@ -410,6 +426,9 @@ def run_local_service(host: str = "127.0.0.1", port: int = 8765) -> None:
                 self._send(handle_request(payload))
             elif self.path.rstrip("/") == "/retry-job":
                 payload["action"] = "retry_job"
+                self._send(handle_request(payload))
+            elif self.path.rstrip("/") == "/support-bundle":
+                payload["action"] = "support_bundle"
                 self._send(handle_request(payload))
             else:
                 self._send({"success": False, "error": "not found"}, status=404)
