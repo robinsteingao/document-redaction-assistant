@@ -1,6 +1,8 @@
 # Core source edition dependencies
 #
-# The current source edition is intentionally lightweight and uses the
-# Python standard library for the baseline text/DOCX/XLSX/text-PDF workflow.
+# The current source edition is intentionally lightweight. XML-based Office
+# parsing uses defusedxml to reject XXE/entity expansion payloads.
 # Optional OCR dependencies are listed in requirements-ocr-rapidocr.txt and
 # requirements-ocr-paddle.txt.
+defusedxml>=0.7.1
+cryptography>=41.0.0,<43

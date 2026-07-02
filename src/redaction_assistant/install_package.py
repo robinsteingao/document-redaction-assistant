@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import secrets
 import shutil
 import zipfile
 from pathlib import Path
 
 from .desktop_shell import build_desktop_shell
 from .installer_assets import build_installer_assets
-from .local_license import write_local_license
+from .local_license import write_license_placeholder
 from .offline_runtime import build_ocr_engine_assets, build_runtime_assets
 from .rules_package import build_rules_assets
 
@@ -28,6 +29,7 @@ def build_install_package(
     app_dir.mkdir(parents=True, exist_ok=True)
     sample_dir.mkdir(parents=True, exist_ok=True)
     docs_dir.mkdir(parents=True, exist_ok=True)
+    service_secret = secrets.token_hex(32)
 
     shutil.copytree(source_root / "src", app_dir / "src", ignore=_ignore_runtime_cache)
     _copy_optional(source_root / "README.md", package_dir / "README.md")
@@ -43,15 +45,15 @@ def build_install_package(
         single.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_root / "examples" / "sample_project.txt", single / "input.txt")
 
-    shell_root = build_desktop_shell(app_dir, version=version, service_url=service_url)
+    shell_root = build_desktop_shell(app_dir, version=version, service_url=service_url, service_secret=service_secret)
     final_shell = app_dir / "desktop_shell"
     if final_shell.exists():
         shutil.rmtree(final_shell)
     shell_root.rename(final_shell)
 
     _write(app_dir / "run_cli.bat", _run_cli_bat())
-    _write(app_dir / "start_desktop_app.bat", _start_desktop_app_bat())
-    _write(app_dir / "start_local_service.bat", _start_service_bat())
+    _write(app_dir / "start_desktop_app.bat", _start_desktop_app_bat(service_secret))
+    _write(app_dir / "start_local_service.bat", _start_service_bat(service_secret))
     _write(app_dir / "register_community.bat", _register_community_bat())
     _write(app_dir / "run_sample_self_test.bat", _sample_self_test_bat())
     _write(app_dir / "check_runtime.bat", _check_runtime_bat())
@@ -66,7 +68,7 @@ def build_install_package(
     _write(app_dir / "build_production_sandbox_config.bat", _production_sandbox_config_bat())
     _write(app_dir / "run_acceptance_smoke.bat", _acceptance_smoke_bat())
     build_rules_assets(app_dir / "rules", version=version)
-    write_local_license(app_dir / "license" / "local_license.json", customer_name="本地试点客户")
+    write_license_placeholder(app_dir / "license" / "local_license.json")
     build_runtime_assets(app_dir / "runtime", version=version)
     build_ocr_engine_assets(app_dir / "ocr_engines", version=version)
     build_installer_assets(package_dir, version=version)
@@ -204,20 +206,22 @@ exit /b 1
 """
 
 
-def _start_service_bat() -> str:
-    return """@echo off
+def _start_service_bat(service_secret: str) -> str:
+    return f"""@echo off
 setlocal
 cd /d "%~dp0"
 set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
+set "DRA_LOCAL_SERVICE_SECRET={service_secret}"
 call run_cli.bat serve-local --host 127.0.0.1 --port 8765
 """
 
 
-def _start_desktop_app_bat() -> str:
-    return """@echo off
+def _start_desktop_app_bat(service_secret: str) -> str:
+    return f"""@echo off
 setlocal
 cd /d "%~dp0"
 set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
+set "DRA_LOCAL_SERVICE_SECRET={service_secret}"
 rem launch-desktop-app starts the local service and opens desktop_shell\\index.html
 call run_cli.bat launch-desktop-app --app-dir "." --host 127.0.0.1 --port 8765 --wait-seconds 12
 if errorlevel 1 (

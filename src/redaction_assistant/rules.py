@@ -24,6 +24,11 @@ LABEL_PATTERNS = [
 ]
 
 REGEX_PATTERNS = [
+    ("id_card", "身份证", "mask", re.compile(r"\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b")),
+    ("bank_card", "银行卡", "mask", re.compile(r"\b(?:4[0-9]{12,18}|5[1-5][0-9]{14,17}|3[47][0-9]{13}|3[068][0-9]{12}|6(?:011|5[0-9]{2})[0-9]{12,15}|62[0-9]{14,17}|(?:2131|1800|35\d{3})\d{11})\b")),
+    ("passport", "护照", "mask", re.compile(r"\b[GEDSMPFT]\d{7,8}\b", re.IGNORECASE)),
+    ("unified_social_credit_code", "信用代码", "pseudonym", re.compile(r"\b[0-9A-HJ-NP-RTUW-Y]{2}\d{6}[0-9A-HJ-NP-RTUW-Y]{10}\b", re.IGNORECASE)),
+    ("address", "地址", "mask", re.compile(r"(?:北京市|天津市|上海市|重庆市|河北省|山西省|辽宁省|吉林省|黑龙江省|江苏省|浙江省|安徽省|福建省|江西省|山东省|河南省|湖北省|湖南省|广东省|海南省|四川省|贵州省|云南省|陕西省|甘肃省|青海省|台湾省|内蒙古自治区|广西壮族自治区|西藏自治区|宁夏回族自治区|新疆维吾尔自治区|香港特别行政区|澳门特别行政区)[\u4e00-\u9fa5A-Za-z0-9（）()\-]{2,60}(?:路|街|道|巷|号|室|楼|层|村|镇|区|县|市)")),
     ("contract_id", "合同编号", "pseudonym", re.compile(r"\bHT-\d{4}-\d{3,}\b", re.IGNORECASE)),
     ("phone", "电话", "mask", re.compile(r"\b1[3-9]\d{9}\b")),
     ("email", "邮箱", "mask", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),

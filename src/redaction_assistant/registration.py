@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -79,7 +82,7 @@ def registration_status(registration_dir: Path | str | None = None, *, edition: 
     request_path = root / "registration_request.json"
     license_path = root / "license.json"
     usage_path = _usage_path(root, edition)
-    usage = _read_json(usage_path, default={"used_files": 0, "events": []})
+    usage = _read_usage(usage_path, root=root, edition=edition)
     license_result = None
     if license_path.exists():
         license_result = validate_local_license(_read_json(license_path, default={}))
@@ -124,16 +127,50 @@ def consume_trial_or_raise(file_count: int, *, edition: str = DEFAULT_EDITION, r
             f"请联系 {CONTACT_EMAIL} 办理年度注册授权（{ANNUAL_FEE_CNY}元/年），并将有效 license.json 放入 {root} 后继续使用。"
         )
     usage_path = _usage_path(root, edition)
-    usage = _read_json(usage_path, default={"used_files": 0, "events": []})
+    usage = _read_usage(usage_path, root=root, edition=edition)
     events = list(usage.get("events") or [])
     events.append({"created_at": datetime.now().isoformat(timespec="seconds"), "file_count": count})
-    usage.update({"schema_version": "document_redaction_trial_usage.v1", "edition": edition, "used_files": used + count, "events": events})
-    usage_path.write_text(json.dumps(usage, ensure_ascii=False, indent=2), encoding="utf-8")
+    usage.update({"schema_version": "document_redaction_trial_usage.v2", "edition": edition, "used_files": used + count, "events": events})
+    _write_usage(usage_path, usage, root=root, edition=edition)
     return registration_status(root, edition=edition) | {"consumed_files": count, "gate": "trial"}
 
 
 def _usage_path(root: Path, edition: str) -> Path:
     return root / f"trial_usage_{edition}.json"
+
+
+def _read_usage(path: Path, *, root: Path, edition: str) -> dict[str, Any]:
+    if not path.exists():
+        return {"used_files": 0, "events": []}
+    data = _read_json(path, default=None)
+    if not isinstance(data, dict):
+        raise TrialLimitExceededError("试用记录校验失败：文件无法读取。")
+    if "signature" not in data:
+        # Legacy unsigned usage is accepted once, then rewritten as signed v2 on next consume.
+        return data
+    signature = str(data.get("signature") or "")
+    payload = dict(data)
+    payload.pop("signature", None)
+    expected = _usage_signature(payload, root=root, edition=edition)
+    if not hmac.compare_digest(signature, expected):
+        raise TrialLimitExceededError("试用记录校验失败：文件可能已被篡改，请联系作者处理。")
+    return data
+
+
+def _write_usage(path: Path, usage: dict[str, Any], *, root: Path, edition: str) -> None:
+    payload = dict(usage)
+    payload.pop("signature", None)
+    payload["signature"] = _usage_signature(payload, root=root, edition=edition)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _usage_signature(payload: dict[str, Any], *, root: Path, edition: str) -> str:
+    data = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    key_material = f"{uuid.getnode()}|{root.resolve()}|{edition}".encode("utf-8")
+    key = hashlib.sha256(key_material).digest()
+    return hmac.new(key, data, hashlib.sha256).hexdigest()
 
 
 def _read_json(path: Path, *, default: Any) -> Any:

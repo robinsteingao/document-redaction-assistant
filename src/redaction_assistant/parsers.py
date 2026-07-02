@@ -6,7 +6,7 @@ import zipfile
 from html import unescape
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 
 TEXT_SUFFIXES = {".txt", ".md"}

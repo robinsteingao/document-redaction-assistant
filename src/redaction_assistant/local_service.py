@@ -11,7 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
+from .auth import verify_request_signature
 from .office_converter import convert_legacy_office_files
 from .ocr_adapter import get_ocr_status
 from .registration import consume_trial_or_raise
@@ -23,10 +25,69 @@ from .workflow import build_redaction_package, write_package
 
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.Lock()
+ALLOWED_ORIGINS = {"http://127.0.0.1:8765", "http://localhost:8765", "null"}
+MAX_REQUEST_BYTES = 2 * 1024 * 1024
+DEFAULT_SERVICE_SECRET = b"document-redaction-assistant-local-service"
 
 
 class JobCancelled(RuntimeError):
     pass
+
+
+def validate_request_headers(headers: dict[str, str], payload: str, *, secret: bytes | None = None) -> bool:
+    normalized = {str(key).lower(): value for key, value in headers.items()}
+    return verify_request_signature(
+        str(normalized.get("x-dra-timestamp") or ""),
+        str(normalized.get("x-dra-signature") or ""),
+        payload,
+        secret=secret or _service_secret(),
+    )
+
+
+def validate_input_paths(paths: list[str] | tuple[str, ...]) -> dict[str, Any]:
+    resolved: list[str] = []
+    for raw in paths or []:
+        path = Path(str(raw)).expanduser().resolve()
+        if _is_dangerous_path(path):
+            return {"ok": False, "error": f"path is not allowed: {path}", "paths": []}
+        resolved.append(str(path))
+    return {"ok": True, "paths": resolved}
+
+
+def validate_output_path(raw: str | Path) -> dict[str, Any]:
+    if not raw:
+        return {"ok": False, "error": "output path is required"}
+    requested = Path(raw).expanduser()
+    if not requested.is_absolute() and any(part == ".." for part in requested.parts):
+        return {"ok": False, "error": f"output path is not allowed: {raw}"}
+    target = requested.resolve() if requested.is_absolute() else (_default_output_root() / requested).resolve()
+    if _is_dangerous_path(target):
+        return {"ok": False, "error": f"output path is not allowed: {target}"}
+    return {"ok": True, "path": str(target)}
+
+
+def _is_dangerous_path(path: Path) -> bool:
+    resolved = path.expanduser().resolve()
+    if any(str(part).lower() == ".ssh" for part in resolved.parts):
+        return True
+    roots = [
+        Path(os.getenv("SystemRoot") or r"C:\Windows"),
+        Path(os.getenv("ProgramFiles") or r"C:\Program Files"),
+        Path(os.getenv("ProgramFiles(x86)") or r"C:\Program Files (x86)"),
+        Path(os.getenv("ProgramData") or r"C:\ProgramData"),
+    ]
+    return any(_same_or_child(resolved, root) for root in roots)
+
+
+def _same_or_child(path: Path, root: Path) -> bool:
+    candidate = str(path.resolve()).casefold().replace("/", "\\").rstrip("\\")
+    base = str(root.expanduser().resolve()).casefold().replace("/", "\\").rstrip("\\")
+    return candidate == base or candidate.startswith(base + "\\")
+
+
+def _service_secret() -> bytes:
+    configured = os.getenv("DRA_LOCAL_SERVICE_SECRET")
+    return configured.encode("utf-8") if configured else DEFAULT_SERVICE_SECRET
 
 
 def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
@@ -38,7 +99,10 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
             paths = payload.get("input_paths") or payload.get("files") or []
             if not paths:
                 raise ValueError("input_paths are required")
-            return {"success": True, "result": collect_user_inputs(paths)}
+            validation = validate_input_paths(paths)
+            if not validation["ok"]:
+                raise ValueError(validation["error"])
+            return {"success": True, "result": collect_user_inputs(validation["paths"])}
         if action == "start_build_package":
             return _start_build_job(payload)
         if action == "cancel_job":
@@ -58,14 +122,25 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
             return {"success": True, "result": build_support_bundle(payload.get("plan"), payload.get("job"))}
         if action == "build_package":
             files = payload.get("files") or []
+            if files:
+                validation = validate_input_paths(files)
+                if not validation["ok"]:
+                    raise ValueError(validation["error"])
+                files = validation["paths"]
             if payload.get("input_paths"):
-                plan = collect_user_inputs(payload.get("input_paths") or [])
+                validation = validate_input_paths(payload.get("input_paths") or [])
+                if not validation["ok"]:
+                    raise ValueError(validation["error"])
+                plan = collect_user_inputs(validation["paths"])
                 prepared = _prepare_files_from_plan(plan, out=payload.get("out"), alias=payload.get("project_alias_id"), payload=payload)
                 files = prepared["files"]
             out = payload.get("out")
             alias = payload.get("project_alias_id")
             if not files or not out or not alias:
                 raise ValueError("files, out and project_alias_id are required")
+            output_validation = validate_output_path(out)
+            if not output_validation["ok"]:
+                raise ValueError(output_validation["error"])
             decisions = None
             if payload.get("review_decisions"):
                 decisions = review_decisions_from_mapping(payload["review_decisions"])
@@ -96,10 +171,22 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _start_build_job(payload: dict[str, Any]) -> dict[str, Any]:
     paths = payload.get("input_paths") or payload.get("files") or []
+    validation = validate_input_paths(paths)
+    if not validation["ok"]:
+        raise ValueError(validation["error"])
+    paths = validation["paths"]
+    payload = dict(payload)
+    if payload.get("input_paths"):
+        payload["input_paths"] = paths
+    if payload.get("files"):
+        payload["files"] = paths
     out = payload.get("out")
     alias = payload.get("project_alias_id")
     if not paths or not out or not alias:
         raise ValueError("input_paths/files, out and project_alias_id are required")
+    output_validation = validate_output_path(out)
+    if not output_validation["ok"]:
+        raise ValueError(output_validation["error"])
     plan = collect_user_inputs(paths)
     if not plan["processable_files"] and not plan.get("convertible_files"):
         raise ValueError("no processable files found")
@@ -365,6 +452,9 @@ def _build_outputs(
 
 
 def _prepare_output_dir(out: str | Path, alias: str) -> Path:
+    validation = validate_output_path(out)
+    if not validation["ok"]:
+        raise ValueError(validation["error"])
     requested = Path(out)
     target = requested if requested.is_absolute() else _default_output_root() / requested
     try:
@@ -395,18 +485,37 @@ def run_local_service(host: str = "127.0.0.1", port: int = 8765) -> None:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
             if self.path.rstrip("/") == "/ocr-status":
+                if not self._origin_allowed():
+                    self._send({"success": False, "error": "origin not allowed"}, status=403)
+                    return
                 self._send(handle_request({"action": "ocr_status"}))
             elif self.path.startswith("/job-status"):
                 from urllib.parse import parse_qs, urlparse
 
                 params = parse_qs(urlparse(self.path).query)
+                if not self._origin_allowed():
+                    self._send({"success": False, "error": "origin not allowed"}, status=403)
+                    return
                 self._send(handle_request({"action": "job_status", "job_id": (params.get("job_id") or [""])[0]}))
             else:
                 self._send({"success": False, "error": "not found"}, status=404)
 
         def do_POST(self):  # noqa: N802
+            if not self._origin_allowed():
+                self._send({"success": False, "error": "origin not allowed"}, status=403)
+                return
+            content_type = self.headers.get("Content-Type", "")
+            if "application/json" not in content_type:
+                self._send({"success": False, "error": "Content-Type must be application/json"}, status=415)
+                return
             length = int(self.headers.get("Content-Length") or "0")
+            if length > MAX_REQUEST_BYTES:
+                self._send({"success": False, "error": "request body too large"}, status=413)
+                return
             raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            if not validate_request_headers(dict(self.headers), raw, secret=_service_secret()):
+                self._send({"success": False, "error": "invalid request signature"}, status=401)
+                return
             try:
                 payload = json.loads(raw)
             except json.JSONDecodeError as exc:
@@ -434,6 +543,9 @@ def run_local_service(host: str = "127.0.0.1", port: int = 8765) -> None:
                 self._send({"success": False, "error": "not found"}, status=404)
 
         def do_OPTIONS(self):  # noqa: N802
+            if not self._origin_allowed():
+                self._send({"success": False, "error": "origin not allowed"}, status=403)
+                return
             self.send_response(204)
             self._send_cors_headers()
             self.end_headers()
@@ -448,9 +560,18 @@ def run_local_service(host: str = "127.0.0.1", port: int = 8765) -> None:
             self.wfile.write(body)
 
         def _send_cors_headers(self) -> None:
-            self.send_header("Access-Control-Allow-Origin", "*")
+            origin = self.headers.get("Origin")
+            if origin in ALLOWED_ORIGINS:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-DRA-Timestamp, X-DRA-Signature")
+
+        def _origin_allowed(self) -> bool:
+            origin = self.headers.get("Origin")
+            if not origin:
+                return True
+            return origin in ALLOWED_ORIGINS
 
         def log_message(self, format, *args):  # noqa: A002
             return

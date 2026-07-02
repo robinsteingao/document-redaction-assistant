@@ -16,7 +16,7 @@ from .workflow import build_redaction_package, restore_text, write_package
 from .desktop_shell import build_desktop_shell
 from .desktop_launcher import launch_desktop_app
 from .install_package import build_install_package
-from .local_license import validate_local_license, write_local_license
+from .local_license import LicenseSigningKeyMissingError, validate_local_license, write_local_license
 from .local_service import run_local_service
 from .ocr_adapter import extract_text_with_ocr, get_ocr_status
 from .offline_ocr_install import (
@@ -357,7 +357,11 @@ def main(argv: list[str] | None = None) -> int:
         if os.getenv("DRA_ENABLE_LICENSE_ISSUER") != "1":
             print("write-license is disabled in the public build. 请联系作者获取年度授权 license.json（个人版80元/年）。")
             return 1
-        path = write_local_license(args.output, customer_name=args.customer_name, expires_on=args.expires_on)
+        try:
+            path = write_local_license(args.output, customer_name=args.customer_name, expires_on=args.expires_on)
+        except LicenseSigningKeyMissingError as exc:
+            print(str(exc))
+            return 1
         print(f"local_license: {path}")
         return 0
 

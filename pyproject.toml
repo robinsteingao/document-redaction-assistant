@@ -3,7 +3,10 @@ name = "document-redaction-assistant"
 version = "0.1.0"
 description = "Local document redaction assistant for STPE-AI assessment-preserving uploads."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "defusedxml>=0.7.1",
+  "cryptography>=41.0.0,<43",
+]
 
 [project.scripts]
 document-redaction-assistant = "redaction_assistant.cli:main"

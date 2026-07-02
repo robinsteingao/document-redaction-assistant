@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 
-def build_desktop_shell(output_root: Path | str, *, version: str, service_url: str | None = None) -> Path:
+def build_desktop_shell(output_root: Path | str, *, version: str, service_url: str | None = None, service_secret: str | None = None) -> Path:
     root = Path(output_root) / f"desktop_shell_{version}"
     root.mkdir(parents=True, exist_ok=True)
     backend = "local_service" if service_url else "local_cli"
@@ -18,12 +19,13 @@ def build_desktop_shell(output_root: Path | str, *, version: str, service_url: s
         }, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    (root / "index.html").write_text(_html(version, service_url), encoding="utf-8")
+    (root / "index.html").write_text(_html(version, service_url, service_secret), encoding="utf-8")
     return root
 
 
-def _html(version: str, service_url: str | None) -> str:
+def _html(version: str, service_url: str | None, service_secret: str | None = None) -> str:
     service = service_url or ""
+    local_secret = service_secret or os.getenv("DRA_LOCAL_SERVICE_SECRET") or "document-redaction-assistant-local-service"
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -129,6 +131,7 @@ def _html(version: str, service_url: str | None) -> str:
 </main>
 <script>
 const serviceUrl = {json.dumps(service, ensure_ascii=False)};
+const localServiceSecret = {json.dumps(local_secret, ensure_ascii=False)};
 let currentJobId = null;
 let lastPlanBody = null;
 let lastJobBody = null;
@@ -149,11 +152,20 @@ async function checkOcr() {{
     el.textContent = localServiceHelp(err);
   }}
 }}
+async function hmacSha256(secret, message) {{
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), {{name: 'HMAC', hash: 'SHA-256'}}, false, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
+}}
 async function postJson(path, payload) {{
+  const body = JSON.stringify(payload);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = await hmacSha256(localServiceSecret, timestamp + '.' + body);
   const res = await fetch(serviceUrl + path, {{
     method: 'POST',
-    headers: {{'Content-Type':'application/json'}},
-    body: JSON.stringify(payload)
+    headers: {{'Content-Type':'application/json', 'X-DRA-Timestamp': timestamp, 'X-DRA-Signature': signature}},
+    body: body
   }});
   return await res.json();
 }}
