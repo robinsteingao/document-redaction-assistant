@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 from .hidden_channels import extract_channel_texts, inspect_hidden_channels, ooxml_safety_channels
 from .parsers import _check_zip_budget, file_sha256, parse_file
-from .redactor import _collect_spans, build_mapping, mapping_hash, redact_text
+from .redactor import _collect_spans, mapping_hash, merge_entities_into_mapping, redact_text
 from .rules import detect_entities_with_dictionary
 
 
@@ -46,7 +46,11 @@ def write_external_release(
 
     The temporary workspace is owned by this invocation. Source snapshots stay
     outside its publish subtree and are never included in the external manifest.
-    PDF export is intentionally disabled, including custom engines.
+    PDF export is intentionally disabled, including custom engines. Callers must
+    pass a mapping that already covers the verified hidden channels (see
+    ``augment_mapping_for_export``); an export that would need new placeholders
+    is blocked as ``channel_mapping_drift`` instead of releasing fields that the
+    persisted mapping cannot restore.
     """
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -89,10 +93,14 @@ def write_external_release(
                     raise ExportBlocked("source_parse_not_ok")
                 # Never trust a cached hidden report, even if its status says clear.
                 hidden = inspect_hidden_channels([snapshot])["files"][0]
-                export_mapping = _mapping_with_channel_text(
+                export_mapping = augment_mapping_for_export(
                     [snapshot], mapping, customer_dictionary=customer_dictionary,
                     review_decisions=review_decisions,
                 )
+                if export_mapping is not mapping:
+                    # Fail closed: exporting with fields that are not in the
+                    # persisted mapping would break restore fidelity.
+                    raise ExportBlocked("channel_mapping_drift")
                 result = _export_one(snapshot, staged, export_mapping, _needles(export_mapping), hidden)
                 if result["status"] == "exported":
                     result["source_sha256"] = digest
@@ -390,18 +398,21 @@ def _zip_xml_text(path):
     return "\n".join(chunks)
 
 
-def _mapping_with_channel_text(files, mapping, *, customer_dictionary, review_decisions):
-    texts = [text for path in files for text in extract_channel_texts(path)]
-    if files[0].suffix in {".txt", ".md"}:
-        texts.append(files[0].read_text(encoding="utf-8"))
-    extra = build_mapping(detect_entities_with_dictionary(texts, customer_dictionary), review_decisions=review_decisions)
-    items = list(mapping.get("items") or [])
-    seen = {item.get("original") for item in items}
-    for item in extra.get("items") or []:
-        if item.get("original") and item["original"] not in seen:
-            items.append(item)
-            seen.add(item["original"])
-    return {**mapping, "items": items}
+def augment_mapping_for_export(files, mapping, *, customer_dictionary, review_decisions):
+    """Re-scan verified snapshots so exports reuse the persistent mapping.
+
+    Hidden-channel repos must keep the unique placeholders that were persisted
+    at analysis time; a channel-only entity missed there is appended with the
+    next free letter instead of renumbering from A and colliding with body
+    fields.
+    """
+    entities = []
+    for path in files:
+        texts = extract_channel_texts(path)
+        if path.suffix.lower() in {".txt", ".md"}:
+            texts.append(path.read_text(encoding="utf-8"))
+        entities.extend(detect_entities_with_dictionary(texts, customer_dictionary))
+    return merge_entities_into_mapping(mapping, entities, review_decisions=review_decisions)
 
 
 def _needles(mapping):

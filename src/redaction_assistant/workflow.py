@@ -6,13 +6,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .crypto import encrypt_mapping_file
+from .crypto import encrypt_mapping_payload_to_file
 from .external_release import write_external_release
-from .hidden_channels import inspect_hidden_channels
+from .hidden_channels import extract_channel_texts, inspect_hidden_channels
 from .impact import build_redaction_impact_summary
 from .ocr_adapter import extract_text_with_ocr
 from .parsers import parse_file
-from .redactor import build_mapping, candidate_id_for, public_mapping_stats, redact_text, restore_text
+from .redactor import (
+    build_mapping,
+    candidate_id_for,
+    merge_entities_into_mapping,
+    public_mapping_stats,
+    redact_text,
+    restore_text,
+)
 from .residual_scan import residual_warning, scan_residuals
 from .rules import Entity, contains_technical_signal, detect_entities_with_dictionary, load_customer_dictionary
 
@@ -70,6 +77,13 @@ def build_redaction_package(
         customer_dictionary=customer_dictionary,
     )
     mapping = build_mapping(entities, review_decisions=review_decisions)
+    # 隐藏通道字段（页眉页脚、文档属性、批注等）会随外发副本一起改写，
+    # 必须并入同一份持久映射并使用全局唯一占位符，否则外发/还原会串号。
+    mapping = merge_entities_into_mapping(
+        mapping,
+        _channel_entities(file_list, customer_dictionary=customer_dictionary),
+        review_decisions=review_decisions,
+    )
     redacted_blocks = []
     for idx, block in enumerate(blocks, start=1):
         redacted_blocks.append({
@@ -131,6 +145,30 @@ def build_redaction_package(
     return package, mapping
 
 
+def _channel_entities(
+    files: list[Path],
+    *,
+    customer_dictionary: Path | str | dict | None = None,
+) -> list[Entity]:
+    """Collect entities from hidden channels so body and channels share one mapping.
+
+    Broken containers do not abort analysis here: they stay blocked at export
+    time (hidden_channels_unverified), while readable channels get persistent
+    placeholders that the exported copies and restore both rely on.
+    """
+    entities: list[Entity] = []
+    for path in files:
+        try:
+            texts = extract_channel_texts(path)
+            if path.suffix.lower() in {".txt", ".md"}:
+                texts.append(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if texts:
+            entities.extend(detect_entities_with_dictionary(texts, customer_dictionary=customer_dictionary))
+    return entities
+
+
 def _ocr_blocks_for_file(path: Path, manifest_item: dict[str, Any], *, ocr_max_pages: int | None = None) -> list[dict[str, Any]]:
     result = extract_text_with_ocr(path, max_pages=ocr_max_pages)
     if result.get("status") != "ok" or not str(result.get("text", "")).strip():
@@ -173,10 +211,8 @@ def write_package(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     package_path = output / "redaction_upload_package.json"
-    mapping_path = output / "local_mapping.private.json"
     report_path = output / "redaction_review_report.md"
     package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8")
-    mapping_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path.write_text(build_review_report(package), encoding="utf-8")
     outputs = {
         "package": package_path,
@@ -191,13 +227,18 @@ def write_package(
             customer_dictionary=customer_dictionary,
             review_decisions=review_decisions,
         ))
+    # 带口令时绝不落盘明文映射：先在内存加密，再以临时文件原子替换发布。
+    # 外发失败会在写映射之前抛出，输出目录不会留下可还原原文的明文映射。
+    mapping_text = json.dumps(mapping, ensure_ascii=False, indent=2)
     if mapping_passphrase:
-        outputs["encrypted_mapping"] = encrypt_mapping_file(
-            mapping_path,
+        outputs["encrypted_mapping"] = encrypt_mapping_payload_to_file(
+            mapping_text.encode("utf-8"),
             output / "local_mapping.private.enc",
             passphrase=mapping_passphrase,
         )
     else:
+        mapping_path = output / "local_mapping.private.json"
+        mapping_path.write_text(mapping_text, encoding="utf-8")
         outputs["mapping"] = mapping_path
     return outputs
 

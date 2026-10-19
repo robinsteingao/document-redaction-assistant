@@ -24,17 +24,23 @@ from redaction_assistant.workflow import build_redaction_package
 MAPPING = {"items": [{"original": "张三", "replacement": "人员A", "kind": "person"}]}
 
 
-def package_for(source):
+def package_for(source, mapping=None):
     _, item = parse_file(source)
     return {
         "residual_scan": {"status": "clear", "hit_count": 0},
         "source_file_manifest": [item],
-        "field_mappings_hash": mapping_hash(MAPPING),
+        "field_mappings_hash": mapping_hash(mapping or MAPPING),
     }
 
 
 def export(tmp_path, source, package=None, **kwargs):
-    paths = release.write_external_release(tmp_path / "out", [source], package or package_for(source), MAPPING, **kwargs)
+    # 与产品路径一致：导出前先把通道内新实体并入映射；导出本身不再临时发明占位符。
+    mapping = release.augment_mapping_for_export(
+        [source], MAPPING, customer_dictionary=None, review_decisions=None,
+    )
+    if package is None:
+        package = package_for(source, mapping)
+    paths = release.write_external_release(tmp_path / "out", [source], package, mapping, **kwargs)
     manifest = json.loads(paths["external_release_manifest"].read_text(encoding="utf-8"))
     return paths, manifest["files"][0]
 

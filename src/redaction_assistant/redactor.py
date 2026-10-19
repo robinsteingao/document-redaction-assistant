@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -10,36 +11,98 @@ from .rules import Entity
 
 def build_mapping(entities: list[Entity], review_decisions: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     counters: dict[str, int] = defaultdict(int)
+    used: set[str] = set()
     items: list[dict[str, Any]] = []
     for entity in entities:
-        candidate_id = candidate_id_for(entity)
-        decision = (review_decisions or {}).get(candidate_id, {})
-        action = decision.get("action")
-        if action == "keep" or (entity.strategy == "keep" and action != "redact"):
-            continue
-        strategy = decision.get("strategy") or ("mask" if entity.strategy == "keep" else entity.strategy)
-        counters[entity.placeholder_prefix] += 1
-        placeholder = f"{entity.placeholder_prefix}{_letter(counters[entity.placeholder_prefix])}"
-        replacement = placeholder
-        if strategy == "range" and entity.replacement_hint:
-            replacement = f"{placeholder}（{entity.replacement_hint}）"
-        elif strategy == "mask":
-            replacement = placeholder
-        items.append({
-            "candidate_id": candidate_id,
-            "kind": entity.kind,
-            "original": entity.original,
-            "placeholder": placeholder,
-            "replacement": replacement,
-            "strategy": strategy,
-            "default_strategy": entity.strategy,
-            "preservation_value": entity.replacement_hint if strategy == "range" else None,
-        })
+        decision = (review_decisions or {}).get(candidate_id_for(entity), {})
+        item = _mapping_item(entity, decision, counters, used)
+        if item is not None:
+            items.append(item)
     return {
         "schema_version": "redaction_mapping.v1",
         "items": items,
         "mapping_hash": mapping_hash({"items": items}),
     }
+
+
+def merge_entities_into_mapping(
+    mapping: dict[str, Any],
+    entities: list[Entity],
+    review_decisions: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Append newly detected entities with globally unique placeholders.
+
+    Existing items are never renumbered or replaced.  New items continue each
+    placeholder prefix's letter sequence, so body fields and hidden-channel
+    fields (headers/footers, properties, comments...) share one persistent
+    mapping instead of colliding with re-used placeholder names.
+    """
+    items = [dict(item) for item in mapping.get("items", [])]
+    counters: dict[str, int] = defaultdict(int)
+    used: set[str] = set()
+    for item in items:
+        counters[_placeholder_prefix_of(item)] += 1
+        placeholder = str(item.get("placeholder") or "")
+        if placeholder:
+            used.add(placeholder)
+    seen = {str(item.get("original") or "") for item in items if item.get("original")}
+    changed = False
+    for entity in entities:
+        if not entity.original or entity.original in seen:
+            continue
+        decision = (review_decisions or {}).get(candidate_id_for(entity), {})
+        item = _mapping_item(entity, decision, counters, used)
+        if item is None:
+            continue
+        items.append(item)
+        seen.add(entity.original)
+        changed = True
+    if not changed:
+        return mapping
+    return {**mapping, "items": items, "mapping_hash": mapping_hash({"items": items})}
+
+
+def _mapping_item(
+    entity: Entity,
+    decision: dict[str, Any],
+    counters: dict[str, int],
+    used: set[str],
+) -> dict[str, Any] | None:
+    action = decision.get("action")
+    if action == "keep" or (entity.strategy == "keep" and action != "redact"):
+        return None
+    strategy = decision.get("strategy") or ("mask" if entity.strategy == "keep" else entity.strategy)
+    while True:
+        counters[entity.placeholder_prefix] += 1
+        placeholder = f"{entity.placeholder_prefix}{_letter(counters[entity.placeholder_prefix])}"
+        if placeholder not in used:
+            break
+    used.add(placeholder)
+    replacement = placeholder
+    if strategy == "range" and entity.replacement_hint:
+        replacement = f"{placeholder}（{entity.replacement_hint}）"
+    elif strategy == "mask":
+        replacement = placeholder
+    return {
+        "candidate_id": candidate_id_for(entity),
+        "kind": entity.kind,
+        "original": entity.original,
+        "placeholder": placeholder,
+        "replacement": replacement,
+        "strategy": strategy,
+        "default_strategy": entity.strategy,
+        "preservation_value": entity.replacement_hint if strategy == "range" else None,
+    }
+
+
+def _placeholder_prefix_of(item: dict[str, Any]) -> str:
+    for key in ("placeholder", "replacement"):
+        text = str(item.get(key) or "")
+        text = re.sub(r"（[^）]*）\s*$", "", text)
+        match = re.match(r"^(.*?)([A-Z]+)$", text)
+        if match and match.group(1):
+            return match.group(1)
+    return ""
 
 
 def mapping_hash(mapping: dict[str, Any]) -> str:

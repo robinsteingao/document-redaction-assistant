@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,20 @@ LEGACY_PBKDF2_ROUNDS = 120_000
 
 def encrypt_mapping_file(source: Path | str, target: Path | str, *, passphrase: str) -> Path:
     source_path = Path(source)
-    target_path = Path(target)
     payload = source_path.read_bytes()
+    encrypt_mapping_payload_to_file(payload, target, passphrase=passphrase)
+    source_path.unlink()
+    return Path(target)
+
+
+def encrypt_mapping_payload_to_file(payload: bytes, target: Path | str, *, passphrase: str) -> Path:
+    """Encrypt in-memory mapping bytes and atomically publish the v2 envelope."""
+    target_path = Path(target)
+    _write_text_atomic(target_path, encrypt_mapping_payload(payload, passphrase=passphrase))
+    return target_path
+
+
+def encrypt_mapping_payload(payload: bytes, *, passphrase: str) -> str:
     salt = os.urandom(16)
     key = _fernet_key(passphrase, salt, PBKDF2_ROUNDS)
     token = Fernet(key).encrypt(payload)
@@ -34,9 +47,21 @@ def encrypt_mapping_file(source: Path | str, target: Path | str, *, passphrase: 
         "ciphertext": token.decode("ascii"),
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
-    target_path.write_text(json.dumps(envelope, ensure_ascii=False, indent=2), encoding="utf-8")
-    source_path.unlink()
-    return target_path
+    return json.dumps(envelope, ensure_ascii=False, indent=2)
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def decrypt_mapping_file(source: Path | str, *, passphrase: str) -> dict[str, Any]:

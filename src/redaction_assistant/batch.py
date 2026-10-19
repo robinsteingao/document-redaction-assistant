@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .crypto import encrypt_mapping_file
 from .review import export_review_workspace
 from .sandbox import build_sandbox_import_package
 from .workflow import build_redaction_package, write_package
@@ -33,25 +32,23 @@ def build_batch_packages(
         alias = project_dir.name
         project_out = output_path / alias
         package, mapping = build_redaction_package(files, project_alias_id=alias)
-        outputs = write_package(project_out, package, mapping, source_files=files)
+        outputs = write_package(
+            project_out,
+            package,
+            mapping,
+            source_files=files,
+            mapping_passphrase=passphrase,
+        )
         outputs.update(export_review_workspace(project_out, package, mapping))
         sandbox = build_sandbox_import_package(package)
         sandbox_path = project_out / "sandbox_import_package.json"
         sandbox_path.write_text(json.dumps(sandbox, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        mapping_path = outputs["mapping"]
-        encrypted_mapping = None
-        if passphrase:
-            encrypted_mapping = encrypt_mapping_file(
-                mapping_path,
-                project_out / "local_mapping.private.enc",
-                passphrase=passphrase,
-            )
         projects.append({
             "project_alias_id": alias,
             "package": str(outputs["package"]),
-            "mapping": str(mapping_path) if not encrypted_mapping else None,
-            "encrypted_mapping": str(encrypted_mapping) if encrypted_mapping else None,
+            "mapping": str(outputs["mapping"]) if outputs.get("mapping") else None,
+            "encrypted_mapping": str(outputs["encrypted_mapping"]) if outputs.get("encrypted_mapping") else None,
             "review_html": str(outputs["review_html"]),
             "sandbox_import": str(sandbox_path),
             "file_count": len(files),

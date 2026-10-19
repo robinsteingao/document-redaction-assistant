@@ -60,13 +60,15 @@ class EndToEndAcceptanceTests(unittest.TestCase):
             package_path = Path(alpha_result["package"])
             sandbox_path = Path(alpha_result["sandbox_import"])
             encrypted_mapping = Path(alpha_result["encrypted_mapping"])
-            plain_mapping = Path(alpha_result["mapping"])
+            plain_mapping = alpha_result["mapping"]
             review_html = Path(alpha_result["review_html"])
 
             self.assertTrue(package_path.exists())
             self.assertTrue(sandbox_path.exists())
             self.assertTrue(encrypted_mapping.exists())
-            self.assertFalse(plain_mapping.exists())
+            # 带口令的批量导出从不落盘明文映射：manifest 返回 None 且目录内不存在明文文件。
+            self.assertIsNone(plain_mapping)
+            self.assertFalse(list(out_root.rglob("local_mapping.private.json")))
             self.assertTrue(review_html.exists())
 
             package_text = package_path.read_text(encoding="utf-8")
