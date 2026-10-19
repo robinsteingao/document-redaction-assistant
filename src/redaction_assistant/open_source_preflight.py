@@ -35,7 +35,8 @@ SENSITIVE_CONTENT_PATTERNS = [
 ]
 
 # 已人工确认的安全形式允许清单：本地服务签名的“代码引用”而非硬编码凭据。
-# 匹配为 (相对路径, 该行允许出现的形式标记)，逐行生效，不会掩盖同文件的其他命中。
+# 匹配为 (相对路径, 允许出现的精确表达式)：扫描时只从行内剔除该表达式本身，
+# 同一行其余内容仍按敏感模式逐条检测，不构成整行豁免。
 SENSITIVE_CONTENT_ALLOWLIST: list[tuple[str, str]] = [
     ("src/redaction_assistant/desktop_shell.py", "service_secret or os.getenv"),
     ("src/redaction_assistant/install_package.py", "service_secret=service_secret"),
@@ -135,10 +136,13 @@ def _scan_text_file(path: Path, relative: str, issues: list[dict[str, Any]]) -> 
         return
     allowed_markers = [marker for allowed_path, marker in SENSITIVE_CONTENT_ALLOWLIST if allowed_path == relative]
     for line in text.splitlines():
-        if any(marker in line for marker in allowed_markers):
-            continue
+        # 仅从行内剔除已审查的精确表达式；同一行其他内容仍逐条检测，
+        # 防止“整行豁免”掩盖同一行上的其他密钥赋值。
+        scanned = line
+        for marker in allowed_markers:
+            scanned = scanned.replace(marker, " ")
         for pattern in SENSITIVE_CONTENT_PATTERNS:
-            if pattern.search(line):
+            if pattern.search(scanned):
                 issues.append({"check": "sensitive_content", "severity": "high", "path": relative, "message": "possible key/secret assignment detected"})
                 return
 

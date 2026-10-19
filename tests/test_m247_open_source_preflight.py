@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from redaction_assistant.cli import main  # noqa: E402
 from redaction_assistant.open_source_preflight import (  # noqa: E402
     REQUIRED_DOCS,
+    SENSITIVE_CONTENT_ALLOWLIST,
     run_open_source_release_preflight,
     write_open_source_preflight_report,
 )
@@ -63,6 +64,38 @@ class M247OpenSourcePreflightTests(unittest.TestCase):
 
             self.assertEqual(report["status"], "blocked")
             self.assertTrue(any(issue["check"] == "sensitive_content" for issue in report["issues"]))
+
+    def test_allowlisted_expression_does_not_mask_other_secrets_on_same_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_required_docs(root)
+            self._write_safe_gitignore(root)
+            probe = root / "src" / "redaction_assistant" / "desktop_shell.py"
+            probe.parent.mkdir(parents=True)
+            probe.write_text(
+                "api_" "key = \"SYNTHETIC_KEY_123456789\"  # service_" "secret or os.getenv\n",
+                encoding="utf-8",
+            )
+
+            report = run_open_source_release_preflight(root)
+
+            self.assertEqual(report["status"], "blocked")
+            self.assertTrue(any(issue["check"] == "sensitive_content" for issue in report["issues"]))
+
+    def test_real_allowlisted_lines_still_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_required_docs(root)
+            self._write_safe_gitignore(root)
+            for relative, _marker in SENSITIVE_CONTENT_ALLOWLIST:
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+
+            report = run_open_source_release_preflight(root)
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual([], report["issues"])
 
     def test_write_report_is_read_only_for_scanned_files(self):
         with tempfile.TemporaryDirectory() as tmp:
