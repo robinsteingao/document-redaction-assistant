@@ -8,6 +8,7 @@ __pycache__/
 .release_full_test*/
 dist/
 build/
+*.egg-info/
 desktop_output/
 out/
 generated/

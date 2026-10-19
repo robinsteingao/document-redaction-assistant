@@ -19,4 +19,4 @@
 4. 人工确认 release 包不含真实样本或客户敏感数据。
 5. 正式公开前完成权属确认，并补齐所选开源许可证（候选 Apache-2.0）的完整官方文本或官方副本。
 
-预检工具只是辅助门禁，不替代人工清单复核、法务审查或正式安全审计。`sensitive_content` 检查如命中“变量引用”形式的误报（例如本地服务签名中的 `service_secret` 形式），需逐条人工确认后加入 `open_source_preflight.py` 中的 `SENSITIVE_CONTENT_ALLOWLIST`（逐行放行，须记录理由），不得直接放宽检测模式。
+预检工具只是辅助门禁，不替代人工清单复核、法务审查或正式安全审计。`sensitive_content` 检查如命中“变量引用”形式的误报（例如本地服务签名中的 `service_secret` 形式），需逐条人工确认后加入 `open_source_preflight.py` 中的 `SENSITIVE_CONTENT_ALLOWLIST`（逐行放行，须记录理由），不得直接放宽检测模式。预检会跳过 `__pycache__`、`.pytest_cache`、`dist`、`build`、`out`、`generated`、`desktop_output`、虚拟环境与 `.egg-info` 等生成目录；这些目录本身不应作为发布内容。

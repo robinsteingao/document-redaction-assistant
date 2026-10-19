@@ -145,7 +145,10 @@ def _scan_text_file(path: Path, relative: str, issues: list[dict[str, Any]]) -> 
 
 def _skip_scan(relative: str) -> bool:
     parts = set(relative.split("/"))
-    return bool(parts & {"__pycache__", ".pytest_cache", "dist", "build"})
+    generated = {"__pycache__", ".pytest_cache", ".git", "dist", "build", "out", "generated", "desktop_output", ".venv", "venv"}
+    if parts & generated:
+        return True
+    return any(part.endswith(".egg-info") for part in parts)
 
 
 def _is_text_file(path: Path) -> bool:
