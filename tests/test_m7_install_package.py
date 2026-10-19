@@ -50,7 +50,7 @@ class M7InstallPackageTests(unittest.TestCase):
             self.assertNotIn("DRA_REGISTRATION_DIR", run_cli)
             self.assertIn("PYTHONPATH", run_cli)
             self.assertNotIn("registration-request", register)
-            self.assertIn("已完全开源", register)
+            self.assertIn("不再需要注册", register)
             self.assertIn("不执行任何操作", register)
             self.assertNotIn("--registration-dir", self_test)
             self.assertIn("--mapping-passphrase", self_test)
@@ -59,6 +59,77 @@ class M7InstallPackageTests(unittest.TestCase):
             self.assertNotIn("registration", manifest["commands"])
             self.assertEqual(manifest["commands"]["local_service"], "app\\start_local_service.bat")
             self.assertNotIn("registration_trial_gate", manifest["capabilities"])
+
+    def test_build_install_package_bundles_core_wheelhouse_when_provided(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            wheelhouse = root / "wheels"
+            wheelhouse.mkdir()
+            for name in _CORE_WHEEL_NAMES:
+                (wheelhouse / name).write_bytes(b"wheel")
+
+            result = build_install_package(root / "out", version="0.27.0", wheelhouse=wheelhouse)
+
+            package_dir = result["package_dir"]
+            app = package_dir / "app"
+            manifest = json.loads((package_dir / "install_manifest.json").read_text(encoding="utf-8"))
+            bundled = sorted(path.name for path in (app / "wheels").glob("*.whl"))
+            run_cli = (app / "run_cli.bat").read_text(encoding="utf-8")
+            installer = (app / "install_core_deps.bat").read_text(encoding="utf-8")
+
+            self.assertEqual(sorted(_CORE_WHEEL_NAMES), bundled)
+            self.assertEqual(sorted(_CORE_WHEEL_NAMES), sorted(manifest["core_dependencies"]["bundled_wheels"]))
+            self.assertIn("bundled_core_dependency_wheels", manifest["capabilities"])
+            self.assertEqual("app\\requirements.txt", manifest["core_dependencies"]["requirements"])
+            self.assertEqual("app\\install_core_deps.bat", manifest["commands"]["install_core_deps"])
+            self.assertTrue((app / "requirements.txt").exists())
+            self.assertIn("--no-index", installer)
+            self.assertIn("--find-links", installer)
+            self.assertIn("import cryptography, pypdf, defusedxml", run_cli)
+            self.assertIn("install_core_deps.bat", run_cli)
+
+    def test_build_install_package_without_wheelhouse_records_no_bundle(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = build_install_package(Path(td), version="0.27.0")
+            package_dir = result["package_dir"]
+            manifest = json.loads((package_dir / "install_manifest.json").read_text(encoding="utf-8"))
+
+            self.assertFalse((package_dir / "app" / "wheels").exists())
+            self.assertEqual([], manifest["core_dependencies"]["bundled_wheels"])
+            self.assertIsNone(manifest["core_dependencies"]["wheelhouse_dir"])
+            self.assertNotIn("bundled_core_dependency_wheels", manifest["capabilities"])
+            self.assertTrue((package_dir / "app" / "install_core_deps.bat").exists())
+
+    def test_core_wheelhouse_must_be_complete_and_version_compatible(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            incomplete = root / "incomplete"
+            incomplete.mkdir()
+            for name in _CORE_WHEEL_NAMES:
+                if name.startswith("cffi-"):
+                    continue
+                (incomplete / name).write_bytes(b"wheel")
+            with self.assertRaises(ValueError):
+                build_install_package(root / "out1", version="0.27.0", wheelhouse=incomplete)
+
+            incompatible = root / "incompatible"
+            incompatible.mkdir()
+            for name in _CORE_WHEEL_NAMES:
+                if name.startswith("cryptography-"):
+                    (incompatible / "cryptography-50.0.2-cp39-abi3-win_amd64.whl").write_bytes(b"wheel")
+                else:
+                    (incompatible / name).write_bytes(b"wheel")
+            with self.assertRaises(ValueError):
+                build_install_package(root / "out2", version="0.27.0", wheelhouse=incompatible)
+
+
+_CORE_WHEEL_NAMES = (
+    "cryptography-42.0.8-cp39-abi3-win_amd64.whl",
+    "cffi-1.17.1-cp311-cp311-win_amd64.whl",
+    "pycparser-2.22-py3-none-any.whl",
+    "pypdf-6.21.1-py3-none-any.whl",
+    "defusedxml-0.7.1-py3-none-any.whl",
+)
 
 
 if __name__ == "__main__":

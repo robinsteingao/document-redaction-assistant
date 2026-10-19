@@ -32,7 +32,7 @@ from .open_source_preflight import run_open_source_release_preflight
 
 
 _NO_LICENSE_NOTICE = (
-    "自 0.27.0 起本软件已完全开源：不再需要注册、年度授权或试用额度，全部功能直接可用。"
+    "自 0.27.0 起本软件不再需要注册、年度授权或试用额度，全部功能直接可用。"
     "本命令已停用，未执行任何操作。"
 )
 

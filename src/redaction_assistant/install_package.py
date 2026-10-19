@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import secrets
 import shutil
 import zipfile
@@ -12,11 +14,16 @@ from .offline_runtime import build_ocr_engine_assets, build_runtime_assets
 from .rules_package import build_rules_assets
 
 
+CORE_DISTRIBUTIONS = ("cryptography", "cffi", "pycparser", "pypdf", "defusedxml")
+_REQUIREMENT_PATTERN = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*([<>=!~].*)?$")
+
+
 def build_install_package(
     output_root: Path | str,
     *,
     version: str,
     service_url: str = "http://127.0.0.1:8765",
+    wheelhouse: Path | str | None = None,
 ) -> dict[str, Path]:
     source_root = Path(__file__).resolve().parents[2]
     package_dir = Path(output_root) / f"document_redaction_assistant_install_{version}"
@@ -66,6 +73,9 @@ def build_install_package(
     _write(app_dir / "record_pilot_feedback.bat", _record_pilot_feedback_bat())
     _write(app_dir / "build_production_sandbox_config.bat", _production_sandbox_config_bat())
     _write(app_dir / "run_acceptance_smoke.bat", _acceptance_smoke_bat())
+    _copy_optional(source_root / "requirements.txt", app_dir / "requirements.txt")
+    bundled_wheels = _stage_core_wheels(source_root, app_dir, wheelhouse)
+    _write(app_dir / "install_core_deps.bat", _install_core_deps_bat())
     build_rules_assets(app_dir / "rules", version=version)
     build_runtime_assets(app_dir / "runtime", version=version)
     build_ocr_engine_assets(app_dir / "ocr_engines", version=version)
@@ -97,6 +107,7 @@ def build_install_package(
             "uninstall": "uninstall.bat",
             "installer_wizard": "installer_wizard\\index.html",
             "cli": "app\\run_cli.bat",
+            "install_core_deps": "app\\install_core_deps.bat",
             "desktop_app": "app\\start_desktop_app.bat",
             "local_service": "app\\start_local_service.bat",
             "desktop_shell": "app\\desktop_shell\\index.html",
@@ -127,12 +138,20 @@ def build_install_package(
             "acceptance_smoke",
             "desktop_app_launcher",
         ],
+        "core_dependencies": {
+            "requirements": "app\\requirements.txt",
+            "installer": "app\\install_core_deps.bat",
+            "wheelhouse_dir": "app\\wheels" if bundled_wheels else None,
+            "bundled_wheels": bundled_wheels,
+        },
         "security_boundary": [
             "原始文件只在本地处理",
             "local_mapping.private.enc 仅本地保存，不得上传；加密口令由客户自行保存",
             "上传 STPE-AI 的文件应为 sandbox_import_package.json 或 redaction_upload_package.json",
         ],
     }
+    if bundled_wheels:
+        manifest["capabilities"].append("bundled_core_dependency_wheels")
     _write(package_dir / "install_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
     archive = _zip_package(package_dir)
     return {"package_dir": package_dir, "archive": archive}
@@ -157,6 +176,144 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _stage_core_wheels(source_root: Path, app_dir: Path, wheelhouse: Path | str | None) -> list[str]:
+    resolved = _resolve_wheelhouse(source_root, wheelhouse)
+    if resolved is None:
+        return []
+    wheels = sorted(resolved.glob("*.whl"))
+    if not wheels:
+        raise ValueError(f"core wheelhouse has no wheels: {resolved}")
+    names = [wheel.name for wheel in wheels]
+    _verify_core_wheels(names)
+    target = app_dir / "wheels"
+    target.mkdir(parents=True, exist_ok=True)
+    for wheel in wheels:
+        shutil.copy2(wheel, target / wheel.name)
+    return names
+
+
+def _resolve_wheelhouse(source_root: Path, wheelhouse: Path | str | None) -> Path | None:
+    candidate = wheelhouse or os.environ.get("DRA_CORE_WHEELHOUSE")
+    if candidate:
+        path = Path(candidate)
+        if not path.is_dir():
+            raise ValueError(f"core wheelhouse not found: {path}")
+        return path
+    default = source_root / "vendor" / "core_wheels"
+    return default if default.is_dir() else None
+
+
+def _verify_core_wheels(names: list[str]) -> None:
+    parsed = [item for item in (_parse_wheel_name(name) for name in names) if item is not None]
+    present = {item[0] for item in parsed}
+    missing = [name for name in CORE_DISTRIBUTIONS if name not in present]
+    if missing:
+        raise ValueError("core wheelhouse is missing wheels for: " + ", ".join(missing))
+    requirements = Path(__file__).resolve().parents[2] / "requirements.txt"
+    if not requirements.exists():
+        return
+    for line in requirements.read_text(encoding="utf-8").splitlines():
+        match = _REQUIREMENT_PATTERN.match(line)
+        if match is None:
+            continue
+        name = match.group(1).replace("_", "-").lower()
+        spec = (match.group(2) or "").strip()
+        if not spec:
+            continue
+        versions = [item[1] for item in parsed if item[0] == name]
+        if not any(_version_satisfies(version, spec) for version in versions):
+            raise ValueError(f"core wheelhouse has no wheel matching {name}{spec}")
+
+
+def _parse_wheel_name(name: str) -> tuple[str, str] | None:
+    stem = name[:-4] if name.lower().endswith(".whl") else name
+    parts = stem.split("-")
+    if len(parts) < 5:
+        return None
+    return parts[0].replace("_", "-").lower(), parts[1]
+
+
+def _version_satisfies(version: str, spec: str) -> bool:
+    current = _version_tuple(version)
+    for clause in spec.split(","):
+        clause = clause.strip()
+        if not clause:
+            continue
+        match = re.match(r"^(>=|<=|==|!=|>|<)\s*([0-9][0-9A-Za-z_.\-]*)$", clause)
+        if match is None:
+            return False
+        operator, bound = match.group(1), _version_tuple(match.group(2))
+        if operator == ">=" and not current >= bound:
+            return False
+        if operator == "<=" and not current <= bound:
+            return False
+        if operator == ">" and not current > bound:
+            return False
+        if operator == "<" and not current < bound:
+            return False
+        if operator == "==" and not current == bound:
+            return False
+        if operator == "!=" and not current != bound:
+            return False
+    return True
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    numbers = [int(piece) for piece in re.findall(r"\d+", text)]
+    return tuple(numbers[:4])
+
+
+def _install_core_deps_bat() -> str:
+    return """@echo off
+setlocal
+cd /d "%~dp0"
+set "EMBEDDED_PY=%~dp0runtime\\python\\python.exe"
+set "DRA_PY="
+if exist "%EMBEDDED_PY%" set "DRA_PY="%EMBEDDED_PY%""
+if not defined DRA_PY (
+  python -c "import sys" >nul 2>nul && set "DRA_PY=python"
+)
+if not defined DRA_PY (
+  py -3 -c "import sys" >nul 2>nul && set "DRA_PY=py -3"
+)
+if not defined DRA_PY (
+  echo Cannot find Python. Please install Python 3.10+ first.
+  exit /b 1
+)
+
+%DRA_PY% -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+if not errorlevel 1 (
+  echo Core dependencies already available.
+  echo CORE_DEPS_OK
+  exit /b
+)
+
+if exist "%~dp0wheels" (
+  echo Installing core dependencies from bundled wheels...
+  %DRA_PY% -m pip install --no-index --find-links "%~dp0wheels" -r "%~dp0requirements.txt"
+  if not errorlevel 1 goto deps_verify
+  echo Bundled wheel install failed; trying online pip as fallback...
+) else (
+  echo No bundled wheels found; installing from the configured package index...
+)
+
+%DRA_PY% -m pip install -r "%~dp0requirements.txt"
+if errorlevel 1 (
+  echo Core dependency installation failed. Check the network or provide app\\wheels.
+  exit /b 1
+)
+
+:deps_verify
+%DRA_PY% -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+if errorlevel 1 (
+  echo Core dependency verification failed after installation.
+  exit /b 1
+)
+echo CORE_DEPS_OK
+exit /b
+"""
+
+
 def _run_cli_bat() -> str:
     return """@echo off
 setlocal
@@ -171,6 +328,8 @@ if exist "%APP_DIR%ocr_engines\\offline_ocr_installed.marker.json" (
 )
 
 if exist "%EMBEDDED_PY%" (
+  "%EMBEDDED_PY%" -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+  if errorlevel 1 goto deps_missing
   "%EMBEDDED_PY%" -m redaction_assistant.cli %*
   exit /b
 )
@@ -179,6 +338,8 @@ where python >nul 2>nul
 if not errorlevel 1 (
   python -c "import sys" >nul 2>nul
   if not errorlevel 1 (
+    python -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+    if errorlevel 1 goto deps_missing
     python -m redaction_assistant.cli %*
     exit /b
   )
@@ -188,12 +349,19 @@ where py >nul 2>nul
 if not errorlevel 1 (
   py -3 -c "import sys" >nul 2>nul
   if not errorlevel 1 (
+    py -3 -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+    if errorlevel 1 goto deps_missing
     py -3 -m redaction_assistant.cli %*
     exit /b
   )
 )
 
 echo Cannot find Python. Please install Python 3.10+ or run with a configured Python environment.
+exit /b 1
+
+:deps_missing
+echo [run_cli] Missing core dependencies: cryptography / pypdf / defusedxml.
+echo [run_cli] Run "%~dp0install_core_deps.bat" once to install them (bundled wheels in app\\wheels preferred, online pip as fallback).
 exit /b 1
 """
 
@@ -226,7 +394,7 @@ if errorlevel 1 (
 def _register_community_bat() -> str:
     return """@echo off
 setlocal
-echo 自 0.27.0 起本软件已完全开源，不再需要注册、试用额度或授权文件，全部功能直接可用。
+echo 自 0.27.0 起本软件不再需要注册、试用额度或授权文件，全部功能直接可用。
 echo 本脚本保留仅为兼容旧版说明，不执行任何操作。
 exit /b
 """
@@ -237,6 +405,8 @@ def _sample_self_test_bat() -> str:
 setlocal
 cd /d "%~dp0"
 if not exist "..\\generated" mkdir "..\\generated"
+call install_core_deps.bat
+if errorlevel 1 exit /b 1
 call check_runtime.bat
 if errorlevel 1 exit /b 1
 call run_cli.bat batch-build --input-root "..\\sample_data" --out "..\\generated\\sample_out" --mapping-passphrase "sample-local-passphrase"
@@ -389,25 +559,26 @@ def _start_here(version: str) -> str:
 
 验收顺序:
 
-1. 双击或在 PowerShell 中运行 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
-2. 本软件已完全开源，无需注册、试用额度或授权文件，全部功能直接可用（旧版 `register_community.bat` 已停用，仅提示）。
-3. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json`。
-4. 运行 `app\\run_sample_self_test.bat`。
-5. 查看 `generated\\sample_out\\batch_manifest.json` 是否生成。
-6. 如需单独测试本地服务，运行 `app\\start_local_service.bat`，再在桌面壳中检查 OCR。
-7. 如需应用规则更新包，运行 `app\\apply_rules_update.bat 更新包目录`。
-8. 如需落盘离线 Python 运行时，运行 `app\\stage_python_runtime.bat python.exe路径`。
-9. 如需登记 OCR 离线依赖包，运行 `app\\build_ocr_wheelhouse.bat wheelhouse目录`。
-10. 如需校验 OCR 离线依赖包，运行 `app\\validate_ocr_package.bat`。
-11. 如需演示报告下载与本地还原，运行 `app\\build_report_delivery_demo.bat`。
-12. 如需生成试点问题台账，运行 `app\\record_pilot_feedback.bat`。
-13. 如需生成生产沙箱联调配置，运行 `app\\build_production_sandbox_config.bat`。
-14. 如需执行完整验收自检，运行 `app\\run_acceptance_smoke.bat`。
+1. 首次使用前运行 `app\\install_core_deps.bat` 安装核心依赖（优先使用包内 `app\\wheels` 离线安装，失败时回退联网 pip）。
+2. 双击或在 PowerShell 中运行 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
+3. 本软件不再需要注册、试用额度或授权文件，全部功能直接可用（旧版 `register_community.bat` 已停用，仅提示）。
+4. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json`。
+5. 运行 `app\\run_sample_self_test.bat`。
+6. 查看 `generated\\sample_out\\batch_manifest.json` 是否生成。
+7. 如需单独测试本地服务，运行 `app\\start_local_service.bat`，再在桌面壳中检查 OCR。
+8. 如需应用规则更新包，运行 `app\\apply_rules_update.bat 更新包目录`。
+9. 如需落盘离线 Python 运行时，运行 `app\\stage_python_runtime.bat python.exe路径`。
+10. 如需登记 OCR 离线依赖包，运行 `app\\build_ocr_wheelhouse.bat wheelhouse目录`。
+11. 如需校验 OCR 离线依赖包，运行 `app\\validate_ocr_package.bat`。
+12. 如需演示报告下载与本地还原，运行 `app\\build_report_delivery_demo.bat`。
+13. 如需生成试点问题台账，运行 `app\\record_pilot_feedback.bat`。
+14. 如需生成生产沙箱联调配置，运行 `app\\build_production_sandbox_config.bat`。
+15. 如需执行完整验收自检，运行 `app\\run_acceptance_smoke.bat`。
 
 边界:
 
 - 当前是可测试安装包，不是正式 MSI/EXE 安装器。
-- 基础可测试安装包不保证内置 Python、OCR wheelhouse 或 Office 转换器；完整离线 runtime-ready 包会额外提供 `app\\install_offline_ocr.bat`、`app\\validate_offline_ocr.bat` 和 `BLIND_TEST_QUICK_START.md`。
+- 基础可测试安装包不保证内置 Python、OCR wheelhouse 或 Office 转换器；构建时提供核心依赖 wheel 的包会在 `app\\wheels` 内置 `cryptography`/`cffi`/`pycparser`/`pypdf`/`defusedxml`，并在 `install_manifest.json` 的 `core_dependencies` 中登记。完整离线 runtime-ready 包会额外提供 `app\\install_offline_ocr.bat`、`app\\validate_offline_ocr.bat` 和 `BLIND_TEST_QUICK_START.md`。
 - 未安装 OCR 时不影响非扫描件（DOCX、XLSX、文本型 PDF、TXT）的正常处理。
 - OCR 插件边界见 `app\\rules\\ocr_plugin_manifest.json`。
 - 离线运行时边界见 `app\\runtime\\runtime_manifest.json`。
