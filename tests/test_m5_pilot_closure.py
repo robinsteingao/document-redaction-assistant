@@ -14,7 +14,10 @@ from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.ocr_adapter import get_ocr_status
 from redaction_assistant.sandbox import build_sandbox_import_package
 from redaction_assistant.workflow import build_redaction_package
-from routers.redaction_sandbox import import_redaction_sandbox_package
+try:  # pragma: no cover - 依赖 STPE-AI 主仓后端的跨仓集成测试
+    from routers.redaction_sandbox import import_redaction_sandbox_package
+except ImportError:  # pragma: no cover
+    import_redaction_sandbox_package = None
 
 
 class FakeDataManager:
@@ -35,6 +38,10 @@ class FakeDataManager:
 
 
 class M5PilotClosureTests(unittest.TestCase):
+    @unittest.skipIf(
+        import_redaction_sandbox_package is None,
+        "STPE-AI backend (routers.redaction_sandbox) not available in this standalone checkout",
+    )
     def test_sandbox_import_package_persists_project_and_redacted_files(self):
         with tempfile.TemporaryDirectory() as td:
             source = Path(td) / "input.txt"

@@ -1,0 +1,5 @@
+# Optional local Office rewrite and output-validation dependencies.
+# Missing dependencies must block Office external copies, not bypass validation.
+lxml>=4.9.3
+python-docx>=1.1.2
+openpyxl>=3.1.2

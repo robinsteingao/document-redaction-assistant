@@ -112,6 +112,7 @@ def _html(version: str, service_url: str | None, service_secret: str | None = No
     <div class="gate">
       <b>评价影响提醒（生成前必看）</b>
       <p>如需改默认处理方式，请先生成一次结果包，打开输出目录中的 <code>review_workspace.html</code>，导出 <code>review_decisions.json</code>，用记事本打开后按提示修改，再粘贴回下方重跑。技术指标、验证信息、金额、专利等关键字段如果被强制隐藏，可能影响后续评价。</p>
+      <p>当前结果包不可直接外发。它是可复核的脱敏文本包，不是已销毁原文的文件。外发前请查看复核报告和外发副本目录。</p>
       <label for="reviewDecisions">自定义字段处理方式（可选）</label>
       <textarea id="reviewDecisions" placeholder='可粘贴 review_decisions.json 内容。简单理解：action=keep 表示保留原样；action=redact 表示隐藏；strategy 可选 pseudonym(假名)、mask(遮盖)、range(区间)。'></textarea>
       <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:10px;">
@@ -224,10 +225,12 @@ function formatJobStatus(body) {{
     '当前文件：' + (progress.file_name || '暂无'),
     '输出目录：' + (outputs.output_dir || r.output_dir || '完成后显示'),
     '输出目录使用提示：可复制上方输出目录到资源管理器地址栏打开；如使用桌面壳打包版，也可点击系统提示中的打开输出目录按钮。',
-    '错误提示：' + (r.error || '无')
+    '错误提示：' + (r.error || '无'),
+    '外发提示：当前结果包不可直接外发。它是可复核的脱敏文本包，不是已销毁原文的文件。'
   ];
   if (outputs.encrypted_mapping) lines.push('加密映射表：' + outputs.encrypted_mapping);
   if (outputs.package) lines.push('结果包文件：' + outputs.package);
+  if (outputs.external_release) lines.push('外发副本目录：' + outputs.external_release + '。该目录仍需人工复核，不能视为已经安全。');
   if (outputs.sandbox_import_package) lines.push('沙箱导入文件：' + outputs.sandbox_import_package);
   return lines.join('\\n') + rawDetails(body);
 }}

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import unittest
@@ -11,69 +10,49 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.cli import main  # noqa: E402
-from redaction_assistant.registration import (  # noqa: E402
-    ANNUAL_FEE_CNY,
-    RegistrationRequiredError,
-    TrialLimitExceededError,
-    build_registration_request,
-    consume_trial_or_raise,
-    registration_status,
-    write_registration_request,
-)
 
 
-class M248RegistrationTrialGateTests(unittest.TestCase):
-    def test_registration_request_records_fee_and_trial_limit(self):
-        request = build_registration_request(edition="community", email="user@example.com")
+class M248OpenSourceNoGateContractTests(unittest.TestCase):
+    """0.27.0 去门禁契约：注册/试用/授权命令保留弃用提示，不再产生任何效果。"""
 
-        self.assertEqual(ANNUAL_FEE_CNY, 80)
-        self.assertEqual(request["annual_fee_cny"], 80)
-        self.assertEqual(request["trial_file_limit"], 50)
-        self.assertIn("每年80元", "".join(request["boundary"]))
+    def test_registration_and_license_modules_are_removed(self):
+        with self.assertRaises(ImportError):
+            __import__("redaction_assistant.registration")
+        with self.assertRaises(ImportError):
+            __import__("redaction_assistant.local_license")
 
-    def test_trial_requires_registration_before_consuming_files(self):
-        with tempfile.TemporaryDirectory() as td:
-            with self.assertRaises(RegistrationRequiredError):
-                consume_trial_or_raise(1, registration_dir=td)
-
-    def test_registered_community_user_can_use_50_files_then_is_blocked(self):
+    def test_deprecated_commands_print_notice_and_create_nothing(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            request = build_registration_request(edition="community", email="user@example.com")
-            write_registration_request(root, request)
-
-            first = consume_trial_or_raise(49, registration_dir=root)
-            second = consume_trial_or_raise(1, registration_dir=root)
-
-            self.assertEqual(first["gate"], "trial")
-            self.assertEqual(second["used_files"], 50)
-            with self.assertRaises(TrialLimitExceededError) as ctx:
-                consume_trial_or_raise(1, registration_dir=root)
-            self.assertIn("80元/年", str(ctx.exception))
-
-    def test_cli_registration_request_trial_status_and_disabled_license_issuer(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-
-            code = main(["registration-request", "--email", "user@example.com", "--out", str(root)])
-            self.assertEqual(0, code)
-            self.assertTrue((root / "registration_request.json").exists())
-            data = json.loads((root / "registration_request.json").read_text(encoding="utf-8"))
-            self.assertEqual(data["annual_fee_cny"], 80)
-
-            status_code = main(["trial-status", "--registration-dir", str(root)])
-            self.assertEqual(0, status_code)
-            self.assertEqual(registration_status(root)["trial_file_limit"], 50)
-
-            license_code = main(["write-license", "--output", str(root / "license.json")])
-            self.assertEqual(1, license_code)
+            self.assertEqual(0, main(["registration-request", "--email", "user@example.com", "--out", str(root)]))
+            self.assertEqual(0, main(["trial-status", "--registration-dir", str(root)]))
+            self.assertEqual(0, main(["write-license", "--output", str(root / "license.json")]))
+            self.assertEqual(0, main(["validate-license", "--input", str(root / "license.json")]))
+            self.assertFalse((root / "registration_request.json").exists())
+            self.assertFalse((root / "registration_mailto.txt").exists())
+            self.assertFalse((root / "trial_usage_community.json").exists())
             self.assertFalse((root / "license.json").exists())
 
-    def test_cli_build_package_blocks_when_trial_quota_is_exceeded(self):
+    def test_legacy_files_are_not_read_modified_or_deleted(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            registration_dir = root / "registration"
-            write_registration_request(registration_dir, build_registration_request(email="user@example.com"))
+            legacy_license = root / "license.json"
+            legacy_usage = root / "trial_usage_community.json"
+            legacy_request = root / "registration_request.json"
+            legacy_license.write_text('{"schema_version": "document_redaction_local_license.v1"}', encoding="utf-8")
+            legacy_usage.write_text('{"used_files": 50}', encoding="utf-8")
+            legacy_request.write_text('{"email": "old@example.com"}', encoding="utf-8")
+            before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.iterdir()}
+
+            self.assertEqual(0, main(["validate-license", "--input", str(legacy_license)]))
+            self.assertEqual(0, main(["trial-status", "--registration-dir", str(root)]))
+
+            after = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.iterdir()}
+            self.assertEqual(before, after)
+
+    def test_build_package_has_no_quota_and_rejects_legacy_registration_flag(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
             files = []
             for index in range(51):
                 path = root / f"source_{index:02d}.txt"
@@ -81,42 +60,32 @@ class M248RegistrationTrialGateTests(unittest.TestCase):
                 files.append(str(path))
 
             code = main([
-                "build-package",
-                "--project-alias-id",
-                "quota-test",
-                "--registration-dir",
-                str(registration_dir),
-                "--out",
-                str(root / "out"),
-                *files,
+                "build-package", "--project-alias-id", "no-quota", "--out", str(root / "out"), *files,
             ])
+            self.assertEqual(0, code)
+            self.assertTrue((root / "out" / "redaction_upload_package.json").exists())
 
-            self.assertEqual(1, code)
-            self.assertFalse((root / "out" / "redaction_upload_package.json").exists())
+            with self.assertRaises(SystemExit):
+                main([
+                    "build-package", "--project-alias-id", "legacy-flag",
+                    "--registration-dir", str(root), "--out", str(root / "out2"), *files,
+                ])
 
-    def test_local_service_blocks_when_trial_quota_is_exceeded(self):
+    def test_local_service_builds_without_registration_dir(self):
         from redaction_assistant.local_service import handle_request
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            registration_dir = root / "registration"
-            write_registration_request(registration_dir, build_registration_request(email="user@example.com"))
-            files = []
-            for index in range(51):
-                path = root / f"source_{index:02d}.txt"
-                path.write_text(f"项目名称：测试项目{index}", encoding="utf-8")
-                files.append(str(path))
-
+            path = root / "source_00.txt"
+            path.write_text("项目名称：测试项目", encoding="utf-8")
             response = handle_request({
                 "action": "build_package",
-                "project_alias_id": "quota-service-test",
-                "registration_dir": str(registration_dir),
+                "project_alias_id": "no-gate-service",
                 "out": str(root / "out"),
-                "files": files,
+                "files": [str(path)],
             })
-
-            self.assertFalse(response["success"])
-            self.assertIn("80元/年", response["error"])
+            self.assertTrue(response["success"], response)
+            self.assertIn("package", response["result"])
 
 
 if __name__ == "__main__":

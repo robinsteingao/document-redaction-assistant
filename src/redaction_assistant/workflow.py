@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from .crypto import encrypt_mapping_file
+from .external_release import write_external_release
+from .hidden_channels import inspect_hidden_channels
+from .impact import build_redaction_impact_summary
 from .ocr_adapter import extract_text_with_ocr
 from .parsers import parse_file
-from .redactor import build_mapping, public_mapping_stats, redact_text, restore_text
-from .rules import contains_technical_signal, detect_entities_with_dictionary
-from .impact import build_redaction_impact_summary
-from .crypto import encrypt_mapping_file
+from .redactor import build_mapping, candidate_id_for, public_mapping_stats, redact_text, restore_text
+from .residual_scan import residual_warning, scan_residuals
+from .rules import Entity, contains_technical_signal, detect_entities_with_dictionary, load_customer_dictionary
+
+OCR_CONFIDENCE_THRESHOLD = 0.5
+try:
+    OCR_CONFIDENCE_THRESHOLD = float(os.getenv("DRA_OCR_CONFIDENCE_THRESHOLD", "0.5"))
+except ValueError:
+    OCR_CONFIDENCE_THRESHOLD = 0.5
 
 
 def build_redaction_package(
@@ -71,6 +81,21 @@ def build_redaction_package(
         })
 
     all_redacted_text = "\n".join(block["text"] for block in redacted_blocks)
+    hidden_channel_report = inspect_hidden_channels(file_list)
+    residual_scan = scan_residuals(
+        all_redacted_text,
+        mapping,
+        kept_values=_kept_values(entities, review_decisions),
+        extra_needles=_dictionary_needles(customer_dictionary, blocks),
+    )
+    review_warnings = _review_warnings(all_redacted_text, mapping, manifest)
+    hidden_message = _hidden_channel_warning(hidden_channel_report)
+    if hidden_message:
+        review_warnings.append(hidden_message)
+    residual_message = residual_warning(residual_scan)
+    if residual_message:
+        review_warnings.append(residual_message)
+    review_warnings.append("当前结果包是可复核的脱敏文本包，不可直接外发。")
     package = {
         "schema_version": "stpe_redaction_upload.v1",
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -87,7 +112,15 @@ def build_redaction_package(
             "mapping_uploaded": False,
         },
         "analysis_preservation_flags": _analysis_flags(all_redacted_text, mapping),
-        "review_warnings": _review_warnings(all_redacted_text, mapping, manifest),
+        "review_warnings": review_warnings,
+        "hidden_channel_report": hidden_channel_report,
+        "residual_scan": residual_scan,
+        "release_readiness": {
+            "text_package_direct_release": False,
+            "reason": "text_package_is_not_an_irreversible_copy",
+            "residual_status": residual_scan.get("status"),
+            "hidden_channel_status": hidden_channel_report.get("overall_status"),
+        },
         "redaction_impact_summary": build_redaction_impact_summary(
             entities,
             mapping,
@@ -108,9 +141,12 @@ def _ocr_blocks_for_file(path: Path, manifest_item: dict[str, Any], *, ocr_max_p
     manifest_item["parser_status"] = "ok"
     manifest_item["ocr_status"] = "ok"
     manifest_item["ocr_engine"] = result.get("engine")
-    manifest_item["ocr_confidence"] = result.get("confidence")
+    confidence = float(result.get("confidence") or 0.0)
+    manifest_item["ocr_confidence"] = confidence
     manifest_item["ocr_pages_processed"] = result.get("pages_processed")
     manifest_item.setdefault("warnings", []).append("ocr_applied")
+    if confidence < OCR_CONFIDENCE_THRESHOLD:
+        manifest_item.setdefault("warnings", []).append(f"ocr_low_confidence:{confidence:.2f}")
     return [{
         "location": "pdf:ocr",
         "text": str(result.get("text", "")).strip(),
@@ -129,6 +165,9 @@ def write_package(
     package: dict[str, Any],
     mapping: dict[str, Any],
     *,
+    source_files: Iterable[Path | str] | None = None,
+    customer_dictionary: Path | str | dict | None = None,
+    review_decisions: dict[str, dict[str, Any]] | None = None,
     mapping_passphrase: str | None = None,
 ) -> dict[str, Path]:
     output = Path(output_dir)
@@ -143,6 +182,15 @@ def write_package(
         "package": package_path,
         "review_report": report_path,
     }
+    if source_files is not None:
+        outputs.update(write_external_release(
+            output,
+            source_files,
+            package,
+            mapping,
+            customer_dictionary=customer_dictionary,
+            review_decisions=review_decisions,
+        ))
     if mapping_passphrase:
         outputs["encrypted_mapping"] = encrypt_mapping_file(
             mapping_path,
@@ -192,7 +240,22 @@ def build_review_report(package: dict[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- 未发现阻断性脱敏风险。")
-    lines.append("")
+    hidden = package.get("hidden_channel_report") or {}
+    residual = package.get("residual_scan") or {}
+    lines.extend([
+        "",
+        "## 隐藏通道",
+        "",
+        f"- 检查状态: {hidden.get('overall_status', 'not_scanned')}",
+        f"- 通道计数: {hidden.get('channel_counts') or {}}",
+        "",
+        "## 残留自检",
+        "",
+        f"- 自检状态: {residual.get('status', 'not_scanned')}",
+        f"- 命中数量: {residual.get('hit_count', 0)}",
+        f"- 说明: {residual.get('note', '当前结果包不可直接外发。')}",
+        "",
+    ])
     return "\n".join(lines)
 
 
@@ -238,6 +301,53 @@ def _analysis_flags(redacted_text: str, mapping: dict[str, Any]) -> dict[str, bo
     }
 
 
+def release_summary_from_package(package: dict[str, Any]) -> dict[str, Any]:
+    hidden = package.get("hidden_channel_report") or {}
+    residual = package.get("residual_scan") or {}
+    counts = hidden.get("channel_counts") or {}
+    safe_counts = {
+        str(kind): int(count)
+        for kind, count in counts.items()
+        if isinstance(count, int) or str(count).isdigit()
+    }
+    return {
+        "hidden_channel_status": str(hidden.get("overall_status") or ""),
+        "residual_status": str(residual.get("status") or ""),
+        "residual_hit_count": int(residual.get("hit_count") or 0),
+        "channel_counts": safe_counts,
+    }
+
+
+def _kept_values(entities: list[Entity], review_decisions: dict[str, dict[str, Any]] | None) -> set[str]:
+    kept: set[str] = set()
+    for entity in entities:
+        decision = (review_decisions or {}).get(candidate_id_for(entity), {})
+        action = decision.get("action")
+        if action == "keep" or (entity.strategy == "keep" and action != "redact"):
+            kept.add(entity.original)
+    return kept
+
+
+def _dictionary_needles(customer_dictionary: Path | str | dict | None, blocks: list[dict[str, Any]]) -> list[str]:
+    dictionary = load_customer_dictionary(customer_dictionary)
+    source_text = "\n".join(block.get("text", "") for block in blocks)
+    needles = []
+    for values in dictionary.values():
+        for value in values:
+            if value and value in source_text:
+                needles.append(value)
+    return needles
+
+
+def _hidden_channel_warning(report: dict[str, Any]) -> str | None:
+    status = report.get("overall_status")
+    if status == "found":
+        return "发现页眉、批注、文档属性或其他未纳入正文识别的通道。当前结果包不可直接外发，请先复核原文件。"
+    if status == "unverified":
+        return "有文件未能完成隐藏通道检查。当前结果包不可直接外发。"
+    return None
+
+
 def _review_warnings(redacted_text: str, mapping: dict[str, Any], manifest: list[dict[str, Any]]) -> list[str]:
     warnings: list[str] = []
     if not contains_technical_signal(redacted_text):
@@ -250,4 +360,11 @@ def _review_warnings(redacted_text: str, mapping: dict[str, Any], manifest: list
     failed = [item["file_name"] for item in manifest if item.get("parser_status") != "ok"]
     if failed:
         warnings.append("以下文件未完成稳定解析: " + "、".join(failed))
+    low_conf_files = [
+        item["file_name"]
+        for item in manifest
+        if any("ocr_low_confidence" in w for w in (item.get("warnings") or []))
+    ]
+    if low_conf_files:
+        warnings.append("以下文件 OCR 置信度偏低，脱敏结果可能存在遗漏，请人工复核: " + "、".join(low_conf_files))
     return warnings

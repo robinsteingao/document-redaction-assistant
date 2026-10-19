@@ -14,9 +14,9 @@
 
 适合个人在本机处理准备外发、分享或提交的材料：
 
-- 简历、合同、报价单、证明材料、项目申报书、验收材料等文档中的姓名、电话、邮箱、地址、身份证号、银行卡号、合同编号等敏感信息。
+- 简历、合同、报价单、证明材料、项目申报书、验收材料等文档中的电话、邮箱、地址、身份证号、银行卡号、护照号、统一社会信用代码、合同编号等敏感信息（基于内置规则识别，仍可能漏报或误报）。
 - 在发送给同事、专家、外部顾问、AI 工具或公开平台前，先生成脱敏版本。
-- 保留本地加密映射表，必要时可以在本机凭口令还原或对照复核。
+- 保留本地加密映射表，必要时可以在本机凭口令还原或对照复核；丢失口令后无法还原。
 
 ### 2. STPE-AI 的本地安全入口
 
@@ -40,15 +40,15 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| 本地解析 | 支持 DOCX、XLSX、文本型 PDF、TXT、Markdown，并逐步补齐扫描 PDF OCR 路径。 |
-| 敏感字段识别 | 识别项目名、单位、合同编号、电话、邮箱、专利号、软著号、金额、身份证号、银行卡号、护照号、统一社会信用代码、地址等常见字段。 |
+| 本地解析 | 支持 DOCX、XLSX、文本型 PDF、TXT、Markdown，扫描 PDF 需另装 OCR；外发副本仅 DOCX、XLSX（PDF 外发暂停）。当前产物是脱敏文本包和复核材料，不是已销毁原文的 PDF、DOCX 或 XLSX。 |
+| 敏感字段识别 | 识别项目名、单位、合同编号、电话、邮箱、地址、身份证号、银行卡号、护照号、统一社会信用代码、专利号、软著号和金额；规则识别仍可能漏报或误报。 |
 | 保真脱敏 | 身份类信息可假名化，金额可区间化，技术指标默认保留，尽量兼顾安全与业务分析价值。 |
 | 人工复核 | 输出候选字段、默认策略、影响等级和本地 HTML 复核工作区，支持 `keep / redact` 决策。 |
-| 本地映射 | 桌面壳和带口令命令会生成 `local_mapping.private.enc`，仅留在本地并凭客户口令还原，不进入上传包。 |
+| 本地映射 | `local_mapping.private.enc`（v2 加密封装，客户端自设口令）仅留在本地，用于复核、对照和报告还原，不进入上传包；兼容读取 v1 旧封装。 |
 | 上传包生成 | 生成脱敏上传包、STPE-AI 沙箱导入包和结构化证据材料，不包含原始文件和本地映射表。 |
 | OCR 接入 | 支持 RapidOCR / PaddleOCR 等本地 OCR 引擎接入；无 OCR 环境时稳定降级。 |
 | 批处理 | 支持多项目目录批量生成脱敏包、复核工作区和批处理清单。 |
-| 安装与商用准备 | 支持本地服务、桌面壳、安装包、商业离线包、运行时预检、规则更新和验收脚本。 |
+| 安装与离线部署准备 | 支持本地服务、桌面壳、安装包、离线组件包、运行时预检、规则更新和验收脚本。 |
 | 开源发布预检 | 提供 `open-source-preflight`，检查发布范围内是否缺少边界文档、是否混入本地映射、密钥、release 快照等。 |
 
 ## 典型工作流
@@ -70,7 +70,7 @@
 | `review_candidates.json` | 待复核字段清单 | 本地复核用，谨慎外发 |
 | `review_workspace.html` | 本地复核页面 | 本地使用 |
 | `redaction_review_report.md` | 脱敏影响说明 | 可作为复核记录 |
-| `local_mapping.private.enc` | 原文与脱敏值加密映射 | 仅本地保存，不应上传；口令丢失后无法还原 |
+| `local_mapping.private.enc` / `local_mapping.private.json` | 原文与脱敏值映射（v2 加密，兼容 v1） | 仅本地保存，不应上传 |
 | 原始文档 | 客户原始材料 | 仅本地保存，不应进入脱敏上传包 |
 
 ## 与 STPE-AI 的关系
@@ -81,12 +81,13 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 
 ## 使用边界
 
+- 身份证号、银行卡号、护照号、统一社会信用代码和地址为内置规则候选识别，仍可能有漏报或误报；不要把任何字段写成已验收能力。
+- 上传包和复核材料不是已销毁原文的原格式文件。v0.27.0 修复了 v0.26.0 已确认的外发缺陷（静默阻断、容器部件回写、PDF 遮盖），并暂停全部 PDF 外发副本（含自定义引擎）；PDF 解析、OCR 与文本上传包不受影响。边界见 [`docs/EXTERNAL_RELEASE_BOUNDARY.md`](docs/EXTERNAL_RELEASE_BOUNDARY.md)。
+- 本软件自 0.27.0 起完全开源：不需要注册、授权或试用额度，不生成也不校验授权文件；不会读取、修改或删除您已有的旧版授权文件。
+- 本地服务默认只允许回环绑定，并提供请求签名、来源限制、路径与大小校验；它不是对外网络服务，不能替代企业终端安全、法务审查或涉密审查。
 - 本工具不能保证所有敏感信息都被自动识别。
 - OCR、规则识别和候选字段识别可能存在遗漏或误判。
 - “评价影响门禁”不是“无隐私残留”证明。
-- 本地服务仅绑定本机使用，浏览器调用会校验 `localhost/127.0.0.1` 来源或包内 `file://` 页面对应的 `Origin: null`、HMAC 请求签名、请求体大小和输入/输出危险路径；这用于降低本机浏览器误触发和跨站调用风险，不替代操作系统账户隔离、终端安全软件或企业安全网关。
-- 授权文件和试用计数采用本地签名校验，目的是降低普通篡改风险；客户/开源包不包含授权签发私钥，正式授权应由发行方离线签发并通过受控渠道发放。
-- 本地映射表使用 `cryptography` 标准 Fernet 封装加密，并保留旧版映射表解密兼容；口令强度和客户本机安全仍会影响实际保护效果。
 - 企业正式使用前，应结合内部制度、数据分级分类、法务要求和安全审计要求进行配置和复核。
 - 涉密材料、真实客户材料或受监管数据不得在未确认合规边界前上传到外部系统或公开仓库。
 
@@ -94,22 +95,23 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 
 > 说明：GitHub 仓库发布的是源码版，默认不内置 OCR 模型、Python 运行时、企业离线安装包或 `.release*` 快照。因此仓库体积较小是正常现象。扫描 PDF/图片 OCR 需要按 `docs/INSTALL_AND_OCR.md` 另行安装本地 OCR 依赖。
 
-首次处理文件前，建议先生成本地注册申请。个人版注册费用按年度缴纳，当前为 **80 元/年**；生成注册申请后可先试用 **50 个文件**。超过试用额度后，软件会阻止继续生成脱敏包，并提示联系作者获取年度授权 `license.json`。
+本软件完全免费开源，无需注册或授权，直接开始使用即可。旧版命令 `registration-request`、`trial-status`、`write-license`、`validate-license` 保留名称，但仅输出停用提示，不再执行任何操作。
 
-```powershell
-python -m redaction_assistant.cli registration-request `
-  --email user@example.com `
-  --out .\registration
-
-python -m redaction_assistant.cli trial-status --registration-dir .\registration
-```
-
-源码目录直接试用时，优先使用 `run_cli.bat`：
+源码目录直接使用时，优先使用 `run_cli.bat`：
 
 ```powershell
 .\run_cli.bat build-package `
   --project-alias-id demo-project `
-  --registration-dir .\registration `
+  --out .\out `
+  .\examples\sample_project.txt
+```
+
+如需以加密映射表输出（自设口令，丢失后无法还原）：
+
+```powershell
+.\run_cli.bat build-package `
+  --project-alias-id demo-project `
+  --mapping-passphrase "your-local-passphrase" `
   --out .\out `
   .\examples\sample_project.txt
 ```
@@ -119,7 +121,6 @@ python -m redaction_assistant.cli trial-status --registration-dir .\registration
 ```powershell
 python -m redaction_assistant.cli build-package `
   --project-alias-id demo-project `
-  --registration-dir .\registration `
   --out .\out `
   .\project.docx .\benefit.xlsx .\contract.pdf
 ```
@@ -132,7 +133,7 @@ python -m redaction_assistant.cli open-source-preflight --root .
 
 更多安装、运行环境和 OCR 依赖说明见：[`docs/INSTALL_AND_OCR.md`](docs/INSTALL_AND_OCR.md)。
 
-下方 M1-M24.8 记录保留了从原型到产品化能力的演进过程，便于了解每一阶段新增了哪些功能。
+下方 M1 起的里程碑记录保留了从原型到产品化能力的演进过程；其中已移除的注册/授权类能力在对应条目中标注了 0.27.0 处置。
 
 ## M1 边界
 
@@ -144,7 +145,7 @@ python -m redaction_assistant.cli open-source-preflight --root .
 - 金额字段使用区间化保真，避免效益分析完全失去可计算依据。
 - 技术指标默认保留，例如电压等级、误差、试运行时间、验证阶段。
 - 生成 `redaction_upload_package.json`，不包含原始文件和本地映射表。
-- 生成本地映射表；客户端发布包默认保存为 `local_mapping.private.enc`，仅留在客户本地并凭口令用于报告还原。
+- 生成 `local_mapping.private.json`，仅留在客户本地，用于报告还原。
 - 生成 `redaction_review_report.md`，提示脱敏对 TRL 和效益分析的影响。
 
 ## M2 增强
@@ -216,11 +217,11 @@ M8 增加安装就绪能力:
 
 ## M9 增强
 
-M9 增加离线运行时与本地授权边界:
+M9 增加离线运行时与本地授权边界（该本地授权机制已于 0.27.0 移除，见下文“0.27.0 开源并集整合”）:
 
-- 新增本地授权文件 `app\license\local_license.json`。
-- 新增 `validate-license` 和 `write-license` 命令。
-- 安装包新增 `app\activate_local_license.bat`，用于本地授权校验。
+- 新增本地授权文件 `app\license\local_license.json`（0.27.0 起不再生成，安装包中已移除）。
+- 新增 `validate-license` 和 `write-license` 命令（0.27.0 起仅保留停用提示）。
+- 安装包新增 `app\activate_local_license.bat`（0.27.0 起仅输出停用提示）。
 - 安装包新增 `app\runtime\runtime_manifest.json`，明确当前不内置 Python 运行时，后续可切换为正式离线运行时。
 - 安装包新增 `app\ocr_engines\ocr_engine_manifest.json`，明确 OCR 引擎包接入槽位。
 - 规则包新增 `rules_update_manifest.json`，约束规则更新可改与不可改边界。
@@ -290,10 +291,10 @@ M15 增加客户试点运行闭环:
 
 ## M16 增强
 
-M16 将目标切换为完整离线商业安装包:
+M16 将目标切换为完整离线组件安装包（离线装配能力，与收费无关）:
 
 - 新增 `build-commercial-package` 命令，可装配本地 Python 运行时、OCR wheelhouse 和 Office/WPS 转换组件目录。
-- 新增 `validate-commercial-package` 命令，校验商业离线包是否具备内置 Python、OCR 离线依赖和 Office 转换器。
+- 新增 `validate-commercial-package` 命令，校验离线包是否具备内置 Python、OCR 离线依赖和 Office 转换器。
 - 新增 `commercial_release_manifest.json`，明确 `complete_offline` 或 `staging_required`。
 - 商业包新增 `app\validate_commercial_package.bat`。
 - 商业包新增 `app\start_offline_app.bat`，用于校验通过后启动本地服务。
@@ -370,7 +371,7 @@ M24.2 新增投用初期客户体验增强能力：
 - 复核页支持按钮选择“保留原样、遮盖隐藏、替换为假名、保留区间”，自动生成 `review_decisions.json`，不要求客户手写 JSON。
 - 增加批量总览与预检/进度业务化分组，优先展示“可直接处理、需先转换、暂不支持、路径不存在”等摘要，再保留技术支持用原始详情。
 - 桌面壳提供“生成技术支持包”入口。技术支持包不包含原文、本地加密映射表、加密口令或密钥，仅用于复制给技术支持定位环境、预检和任务状态问题。
-- 客户端生成结果包时要求设置本地映射表加密口令，输出 `local_mapping.private.enc`，不保留明文映射表。
+- 客户端生成结果包时要求设置本地映射表加密口令，映射表保存为 `local_mapping.private.enc`，不保留明文映射表。
 - 输出目录提示更明确，客户可按界面显示的“输出目录”查找结果文件。
 - M25 愿景记录为 PaddleOCR 3.7 / PP-OCRv6、OCR 置信度复核、表格/版面结构化解析；该能力不属于 M24.2 交付范围。
 
@@ -378,36 +379,56 @@ M24.2 新增投用初期客户体验增强能力：
 
 M24.7 新增开源前只读发布预检：
 
-- 检查 `README.md`、`LICENSE`、`PRIVACY.md`、`COMMERCIAL.md`、`DISCLAIMER.md` 和开源发布指南是否存在。
+- 检查 `README.md`、`LICENSE`、`PRIVACY.md`、`DISCLAIMER.md` 和开源发布指南是否存在。
 - 检查 `.gitignore` 是否覆盖 `.release*`、`local_mapping.private*`、`trial_usage_*.json`、注册申请、`license.json` 和 `stpe_upload_package/` 等不应公开的本地输出。
 - 扫描发布范围内疑似私有映射、release 快照、密钥文件和常见 secret 赋值痕迹。
 - 预检只生成 JSON 结果，不删除、不移动、不重命名任何文件；正式开源仍需人工清单复核、法务审查和安全审计。
 
-## M24.8 增强
+## M24.8 增强（已于 0.27.0 移除）
 
-M24.8 补齐轻注册与试用额度门禁：
+M24.8 曾加入轻注册与试用额度门禁；0.27.0 开源化整合时已整体移除：
 
-- 个人社区版需先生成本地注册申请，注册申请不包含原始文档、本地映射表或脱敏正文。
-- 个人版注册费用按年度缴纳，当前为 **80 元/年**。
-- 注册后可先试用 **50 个文件**；超过额度后，`build-package` / `batch-build` / 本地服务生成包会阻止继续处理。
-- 导入有效 `license.json` 后可继续使用授权范围内能力。
-- 公开源码版不提供自助生成正式授权文件的入口，`write-license` 默认禁用，避免用户绕过注册授权流程。
+- 注册申请、试用额度与年度授权机制删除；`registration-request`、`trial-status`、`write-license`、`validate-license` 保留命令名，仅输出停用提示，不再执行任何操作。
+- 不读取、不修改、不删除用户已有的旧版授权文件、映射表或原文。
+- 鉴权（本地服务请求签名）、来源限制、路径校验、大小限制和超时等安全与资源限制保留。
 
-## M24.9 安全加固
+M24.8 及更早发布物中的注册/授权描述仅作为历史记录保留，不代表当前功能。
 
-M24.9 面向开源后客户侧安全短板补齐：
+## M25 质量加固
 
-- 本地服务不再返回 `Access-Control-Allow-Origin: *`，仅允许 `http://127.0.0.1:8765` / `http://localhost:8765` 来源以及包内 `file://` 页面对应的 `Origin: null`；POST 请求要求 `Content-Type: application/json`、请求体大小限制和 HMAC 签名头。
-- 安装包构建时会生成包级本地服务 secret，并同时写入桌面壳和启动脚本；源码直接开发模式可通过 `DRA_LOCAL_SERVICE_SECRET` 覆盖默认值。
-- 本地服务会拒绝 Windows 系统目录、Program Files、ProgramData、System32、`.ssh` 等危险输入路径和危险输出路径，降低路径误用/遍历风险。
-- 本地映射表新写入 `local_mapping_envelope.v2`，使用 `cryptography.fernet.Fernet` 标准封装；旧 `local_mapping_envelope.v1` 仅保留解密兼容，不再作为新写入格式。
-- 授权文件升级为 `document_redaction_local_license.v2` 并校验 Ed25519 签名；客户/开源包仅内置公钥和待替换授权占位文件，不内置签发私钥；试用计数升级为 `document_redaction_trial_usage.v2` 并校验 HMAC 签名，发现篡改时拒绝继续试用。
-- XML 解析改用 `defusedxml`，降低实体扩展等 XML 解析风险。
-- 内置 PII 规则补齐身份证、银行卡、护照号、统一社会信用代码和地址候选识别；规则识别仍可能有漏报/误报，正式外发前必须人工复核。
+M25 针对脱敏核心逻辑、PDF 解析、本地服务健壮性和 OCR 质量门禁进行 P2 级质量加固：
+
+- 脱敏替换改为基于位置标记的 span 定位替换，解决朴素 `str.replace` 的子串误匹配（如"张三"匹配"张三丰"）、级联替换（替换结果被后续规则再次匹配）和占位符碰撞问题；还原逻辑同步改为 span 方式。
+- PDF 文本解析优先使用 `pypdf` 提取 FlateDecode 压缩文本流，正则方式降级为 fallback；扫描 PDF 检测改为先检查文本内容流（`BT`/`ET`/`/Text`），避免含图片的文本型 PDF 被误判为扫描件。
+- 本地服务异常信息不再直接返回客户端：`ValueError` 返回原始用户提示，其他异常写入本地日志并返回通用消息；`_JOBS` 字典新增 30 分钟 TTL 自动清理和最大 100 个作业容量限制。
+- OCR 结果新增置信度门禁：低于 `DRA_OCR_CONFIDENCE_THRESHOLD`（默认 0.5）时在 manifest 和复核报告中添加低置信度警告，提示用户人工复核。
+- `amount_range` 函数清理死代码，简化返回逻辑。
+
+## M26 外发边界与 0.27.0 修复
+
+当前包版本为 **0.27.0**。M26 初始实现曾存在已确认的阻断、容器回写和 PDF 遮盖问题；v0.27.0 并集整合修复并收紧外发门禁。不接入云端模型，技术指标默认保留、评价影响门禁语义不变：
+
+- 内置规则新增身份证号、银行卡号、护照号、统一社会信用代码和地址候选识别，仍可能漏报或误报，必须人工复核。
+- 结果包增加隐藏通道检查和残留自检。检查不到不标成干净。
+- 桌面壳和复核报告写明当前结果包不可直接外发。
+- 新增 `external_release/`。做不到安全回写的文件不进入该目录，目录内不含本地映射表；全部 PDF 外发副本（含自定义引擎）暂停。
+- 技术指标默认保留，金额默认区间化，评价影响门禁语义不变。
+
+边界说明见 [`docs/EXTERNAL_RELEASE_BOUNDARY.md`](docs/EXTERNAL_RELEASE_BOUNDARY.md)。本版本不承诺材料已经安全。
+
+## 0.27.0 开源并集整合
+
+0.27.0 将“外发安全修订”与“客户端加密映射表”两条开发线并集整合为单一开源发布线：
+
+- 彻底取消注册、试用额度、年度授权与商业文件配额；不读取、不修改、不删除用户已有授权文件、映射表和原文。
+- 本地映射表以 `local_mapping.private.enc`（v2 封装）保存，兼容读取 v1 旧封装；CLI 与本地服务均支持加密输出。
+- 本地服务并集安全能力：请求签名、来源限制、路径与大小校验、公开任务响应脱敏、任务 TTL 与容量限制、通用错误消息。
+- 核心依赖为 `pypdf`、`defusedxml`、`cryptography`；Office 外发副本校验依赖见 `requirements-external-release.txt`。
+- 版本号统一为 `0.27.0`；测试并集与产物矩阵验收另行执行，不继承历史通过结论。
 
 ## 命令行用法
 
-源码目录直接试用时，优先使用 `run_cli.bat`，它会自动设置本地包路径:
+源码目录直接使用时，优先使用 `run_cli.bat`，它会自动设置本地包路径:
 
 ```powershell
 .\run_cli.bat build-package `
@@ -529,7 +550,7 @@ python -m redaction_assistant.cli serve-local `
 .\app\run_sample_self_test.bat
 ```
 
-单独校验本地授权:
+旧版授权校验入口（0.27.0 起仅输出停用提示）:
 
 ```powershell
 .\app\activate_local_license.bat
@@ -589,7 +610,7 @@ python -m redaction_assistant.cli serve-local `
 .\setup.bat
 ```
 
-生成完整离线商业包:
+生成完整离线组件包（离线装配，与收费无关）:
 
 ```powershell
 python -m redaction_assistant.cli build-commercial-package `
@@ -600,7 +621,7 @@ python -m redaction_assistant.cli build-commercial-package `
   --office-runtime-dir .\runtime_sources\libreoffice
 ```
 
-校验完整离线商业包:
+校验完整离线组件包:
 
 ```powershell
 .\app\validate_commercial_package.bat
@@ -666,3 +687,4 @@ python -m redaction_assistant.cli restore `
 
 - M24: `.xls/.wps` 真实样本专项验证、真正的文件/文件夹选择入口、完整 OCR 的暂停/续跑/失败重试。
 - M24 已完成客户自定义脱敏与评价影响门禁；`.xls/.wps` 真实样本专项验证仍等待样本副本后执行。
+- 0.27.0 已开源化，并整合外发边界修复与客户端加密映射表。身份证号、银行卡号和地址已作为内置规则候选识别（仍可能有漏报误报）；无标签人名识别（NER）仍未实现。全部 PDF 外发副本暂停，待按页识别与视觉复核通过后另行恢复。

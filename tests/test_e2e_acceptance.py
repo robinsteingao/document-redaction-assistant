@@ -13,10 +13,17 @@ sys.path.insert(0, str(WORKSPACE / "prototype" / "src" / "backend"))
 from redaction_assistant.batch import build_batch_packages
 from redaction_assistant.crypto import decrypt_mapping_file
 from redaction_assistant.redactor import restore_text
-from routers.redaction_sandbox import validate_redaction_sandbox_payload
+try:  # pragma: no cover - 依赖 STPE-AI 主仓后端的跨仓集成测试
+    from routers.redaction_sandbox import validate_redaction_sandbox_payload
+except ImportError:  # pragma: no cover
+    validate_redaction_sandbox_payload = None
 
 
 class EndToEndAcceptanceTests(unittest.TestCase):
+    @unittest.skipIf(
+        validate_redaction_sandbox_payload is None,
+        "STPE-AI backend (routers.redaction_sandbox) not available in this standalone checkout",
+    )
     def test_local_batch_to_sandbox_import_to_restore_flow(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

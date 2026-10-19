@@ -89,7 +89,7 @@ class M3TrialReadinessTests(unittest.TestCase):
             for item in result["projects"]:
                 self.assertTrue(Path(item["package"]).exists())
                 self.assertTrue(Path(item["encrypted_mapping"]).exists())
-                self.assertFalse(Path(item["mapping"]).exists())
+                self.assertIsNone(item["mapping"])
 
 
 if __name__ == "__main__":

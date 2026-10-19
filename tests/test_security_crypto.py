@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
@@ -7,10 +7,14 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from redaction_assistant.crypto import decrypt_mapping_file, encrypt_mapping_file
+
+V1_FIXTURE = ROOT / "tests" / "fixtures" / "legacy_mapping_v1_v026.enc.json"
 
 
 def _legacy_pbkdf2(password: bytes, salt: bytes, rounds: int, *, dklen: int) -> bytes:
@@ -81,3 +85,20 @@ def test_decrypt_legacy_v1_envelope_still_supported(tmp_path: Path):
     encrypted.write_text(json.dumps(envelope, ensure_ascii=False), encoding="utf-8")
 
     assert decrypt_mapping_file(encrypted, passphrase="old-pass") == mapping
+
+
+def test_reads_real_v026_v1_ciphertext_fixture():
+    """夹具由 v0.26.0 线真实写入器生成（pbkdf2_hmac_sha256 + 流式 XOR + sha256 tag），验证跨线 v1 读取兼容。"""
+    envelope = json.loads(V1_FIXTURE.read_text(encoding="utf-8"))
+    assert envelope["schema_version"] == "local_mapping_envelope.v1"
+    assert envelope["rounds"] == 120_000
+
+    mapping = decrypt_mapping_file(V1_FIXTURE, passphrase="fixture-v1-passphrase")
+
+    assert mapping["schema_version"] == "redaction_mapping.v1"
+    assert mapping["mapping_hash"]
+    originals = {item["original"] for item in mapping["items"]}
+    assert {"example@example.com", "13800000000", "示例科技有限公司", "示例配网监测项目"} <= originals
+
+    with pytest.raises(ValueError):
+        decrypt_mapping_file(V1_FIXTURE, passphrase="wrong-passphrase")

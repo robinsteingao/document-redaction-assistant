@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -11,23 +12,32 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
 
 from .auth import verify_request_signature
 from .office_converter import convert_legacy_office_files
 from .ocr_adapter import get_ocr_status
-from .registration import consume_trial_or_raise
 from .review import export_review_workspace, review_decisions_from_mapping
 from .sandbox import build_sandbox_import_package
 from .support_bundle import build_support_bundle
 from .user_batch import collect_user_inputs, ocr_max_pages_for_mode
-from .workflow import build_redaction_package, write_package
+from .workflow import build_redaction_package, release_summary_from_package, write_package
 
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.Lock()
+JOB_TTL_SECONDS = 1800  # 30 minutes
+MAX_JOBS = 100
 ALLOWED_ORIGINS = {"http://127.0.0.1:8765", "http://localhost:8765", "null"}
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 DEFAULT_SERVICE_SECRET = b"document-redaction-assistant-local-service"
+
+_SERVICE_LOG = logging.getLogger("dra.local_service")
+if not _SERVICE_LOG.handlers:
+    _log_dir = Path.home() / ".document_redaction_assistant"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _handler = logging.FileHandler(_log_dir / "service.log", encoding="utf-8")
+    _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    _SERVICE_LOG.addHandler(_handler)
+    _SERVICE_LOG.setLevel(logging.DEBUG)
 
 
 class JobCancelled(RuntimeError):
@@ -154,8 +164,6 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                     customer_confirmed_degradation_risk=_explicit_bool(payload.get("customer_confirmed_degradation_risk")),
                     ocr_mode=payload.get("ocr_mode"),
                     mapping_passphrase=payload.get("mapping_passphrase"),
-                    registration_dir=payload.get("registration_dir"),
-                    edition=payload.get("edition") or "community",
                 )
             finally:
                 if payload.get("input_paths"):
@@ -165,11 +173,41 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any]:
                 "result": {name: str(path) for name, path in outputs.items()},
             }
         raise ValueError(f"unsupported action: {action}")
-    except Exception as exc:
+    except ValueError as exc:
+        _SERVICE_LOG.debug("invalid request: %s: %s", type(exc).__name__, exc)
         return {"success": False, "error": str(exc)}
+    except Exception as exc:
+        _SERVICE_LOG.error("internal error in action %r: %s: %s", action, type(exc).__name__, exc, exc_info=True)
+        return {"success": False, "error": "处理失败，请查看本地日志或联系技术支持。"}
+
+
+def _cleanup_expired_jobs() -> None:
+    """Remove terminal-state jobs older than JOB_TTL_SECONDS. Must be called under _JOBS_LOCK."""
+    now = time.time()
+    expired: list[str] = []
+    for job_id, job in _JOBS.items():
+        if job.get("status") not in {"completed", "failed", "cancelled"}:
+            continue
+        completed_at = job.get("completed_at")
+        if not completed_at:
+            continue
+        try:
+            job_time = datetime.fromisoformat(completed_at).timestamp()
+        except (ValueError, TypeError):
+            continue
+        if now - job_time > JOB_TTL_SECONDS:
+            expired.append(job_id)
+    for job_id in expired:
+        _JOBS.pop(job_id, None)
+    if expired:
+        _SERVICE_LOG.debug("cleaned up %d expired jobs", len(expired))
 
 
 def _start_build_job(payload: dict[str, Any]) -> dict[str, Any]:
+    with _JOBS_LOCK:
+        _cleanup_expired_jobs()
+        if len(_JOBS) >= MAX_JOBS:
+            return {"success": False, "error": "服务繁忙，请稍后重试。"}
     paths = payload.get("input_paths") or payload.get("files") or []
     validation = validate_input_paths(paths)
     if not validation["ok"]:
@@ -208,6 +246,9 @@ def _start_build_job(payload: dict[str, Any]) -> dict[str, Any]:
         "error": None,
     }
     with _JOBS_LOCK:
+        _cleanup_expired_jobs()
+        if len(_JOBS) >= MAX_JOBS:
+            return {"success": False, "error": "服务繁忙，请稍后重试。"}
         _JOBS[job_id] = job
     thread = threading.Thread(
         target=_run_build_job,
@@ -293,8 +334,6 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
                 ocr_mode=payload.get("ocr_mode"),
                 mapping_passphrase=payload.get("mapping_passphrase"),
                 progress_cb=progress,
-                registration_dir=payload.get("registration_dir"),
-                edition=payload.get("edition") or "community",
             )
         finally:
             _cleanup_conversion_workspace(prepared)
@@ -304,6 +343,7 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
             duration_seconds=round(time.monotonic() - started, 2),
             outputs={name: str(path) for name, path in outputs.items()},
             conversion_report=prepared.get("conversion_report"),
+            release_summary=_release_summary_from_outputs(outputs),
         )
     except JobCancelled as exc:
         update(
@@ -312,12 +352,13 @@ def _run_build_job(job_id: str, files: list[str], out: str, alias: str, payload:
             duration_seconds=round(time.monotonic() - started, 2),
             error=str(exc),
         )
-    except Exception as exc:  # keep service alive and expose failure to user
+    except Exception as exc:  # keep service alive; log full detail, expose generic message
+        _SERVICE_LOG.error("job %s failed: %s: %s", job_id, type(exc).__name__, exc, exc_info=True)
         update(
             status="failed",
             completed_at=datetime.now().isoformat(timespec="seconds"),
             duration_seconds=round(time.monotonic() - started, 2),
-            error=f"{type(exc).__name__}: {exc}",
+            error="处理失败，请查看本地日志或联系技术支持。",
         )
 
 
@@ -394,12 +435,9 @@ def _public_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "review_decisions",
         "customer_confirmed_degradation_risk",
         "ocr_mode",
-        "mapping_passphrase",
         "enable_conversion",
-        "registration_dir",
-        "edition",
     }
-    return {key: value for key, value in payload.items() if key in allowed and key != "mapping_passphrase"}
+    return {key: value for key, value in payload.items() if key in allowed}
 
 
 def _public_job_response(job: dict[str, Any]) -> dict[str, Any]:
@@ -414,6 +452,17 @@ def _explicit_bool(value: Any) -> bool:
     return value is True
 
 
+def _release_summary_from_outputs(outputs: dict[str, Path]) -> dict[str, Any]:
+    package_path = outputs.get("package")
+    if not package_path or not Path(package_path).exists():
+        return {}
+    try:
+        package = json.loads(Path(package_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return release_summary_from_package(package)
+
+
 def _build_outputs(
     files: list[str] | list[Path],
     out: str | Path,
@@ -425,11 +474,8 @@ def _build_outputs(
     ocr_mode: str | None = None,
     mapping_passphrase: str | None = None,
     progress_cb=None,
-    registration_dir: str | Path | None = None,
-    edition: str = "community",
 ) -> dict[str, Path]:
     output_dir = _prepare_output_dir(out, alias)
-    consume_trial_or_raise(len(files), edition=edition, registration_dir=registration_dir)
     package, mapping = build_redaction_package(
         files,
         project_alias_id=alias,
@@ -439,7 +485,15 @@ def _build_outputs(
         ocr_max_pages=ocr_max_pages_for_mode(ocr_mode),
         progress_cb=progress_cb,
     )
-    outputs = write_package(output_dir, package, mapping, mapping_passphrase=mapping_passphrase)
+    outputs = write_package(
+        output_dir,
+        package,
+        mapping,
+        source_files=files,
+        customer_dictionary=customer_dictionary,
+        review_decisions=review_decisions,
+        mapping_passphrase=mapping_passphrase,
+    )
     outputs.update(export_review_workspace(output_dir, package, mapping))
     sandbox_path = output_dir / "sandbox_import_package.json"
     sandbox_path.write_text(
@@ -482,6 +536,17 @@ def _safe_name(value: str) -> str:
 
 
 def run_local_service(host: str = "127.0.0.1", port: int = 8765) -> None:
+    # security: 服务默认只允许回环绑定，避免暴露到局域网/公网。
+    # 请求层已有签名、Origin 与大小校验；仍要求显式设置 DRA_ALLOW_NON_LOOPBACK=1
+    # 才允许非回环（服务/桌面壳管理员明确授权的场景）。
+    _loopback_hosts = {"127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"}
+    allow_non_loopback = os.environ.get("DRA_ALLOW_NON_LOOPBACK", "").strip().lower()
+    if host not in _loopback_hosts and allow_non_loopback not in ("1", "true", "yes", "on"):
+        raise ValueError(
+            f"refusing to bind non-loopback host {host!r} without DRA_ALLOW_NON_LOOPBACK=1 "
+            "(local service is loopback-only by default)"
+        )
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
             if self.path.rstrip("/") == "/ocr-status":

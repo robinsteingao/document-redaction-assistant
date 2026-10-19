@@ -33,7 +33,7 @@ def build_batch_packages(
         alias = project_dir.name
         project_out = output_path / alias
         package, mapping = build_redaction_package(files, project_alias_id=alias)
-        outputs = write_package(project_out, package, mapping)
+        outputs = write_package(project_out, package, mapping, source_files=files)
         outputs.update(export_review_workspace(project_out, package, mapping))
         sandbox = build_sandbox_import_package(package)
         sandbox_path = project_out / "sandbox_import_package.json"
@@ -50,7 +50,7 @@ def build_batch_packages(
         projects.append({
             "project_alias_id": alias,
             "package": str(outputs["package"]),
-            "mapping": str(mapping_path),
+            "mapping": str(mapping_path) if not encrypted_mapping else None,
             "encrypted_mapping": str(encrypted_mapping) if encrypted_mapping else None,
             "review_html": str(outputs["review_html"]),
             "sandbox_import": str(sandbox_path),

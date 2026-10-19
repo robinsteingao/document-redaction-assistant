@@ -151,4 +151,4 @@ def amount_range(value: str) -> str:
         label = "1000万至5000万"
     else:
         label = "高于5000万"
-    return label if unit in {"万元", "外币金额"} else label
+    return label

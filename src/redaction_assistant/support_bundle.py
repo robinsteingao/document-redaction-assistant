@@ -52,6 +52,22 @@ def _safe_job_for_summary(job: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _safe_release_summary(job: dict[str, Any] | None) -> dict[str, Any]:
+    summary = (job or {}).get("release_summary") or {}
+    counts = summary.get("channel_counts") or {}
+    safe_counts = {}
+    if isinstance(counts, dict):
+        for kind, count in counts.items():
+            if isinstance(count, int):
+                safe_counts[str(kind)] = count
+    return {
+        "hidden_channel_status": str(summary.get("hidden_channel_status") or ""),
+        "residual_status": str(summary.get("residual_status") or ""),
+        "residual_hit_count": int(summary.get("residual_hit_count") or 0),
+        "channel_counts": safe_counts,
+    }
+
+
 def _safe_error_summary(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -71,4 +87,5 @@ def build_support_bundle(plan: dict[str, Any] | None, job: dict[str, Any] | None
         "input_plan_summary": _safe_plan_summary(plan),
         "job_summary": build_batch_job_summary(_safe_job_for_summary(job)),
         "job_metadata": _safe_job_metadata(job),
+        "release_summary": _safe_release_summary(job),
     }

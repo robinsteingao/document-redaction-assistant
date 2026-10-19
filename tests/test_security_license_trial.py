@@ -1,73 +1,47 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import json
 import sys
-import base64
-from datetime import date
 from pathlib import Path
-
-import pytest
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from redaction_assistant.local_license import LicenseSigningKeyMissingError, create_local_license, validate_local_license
-from redaction_assistant.registration import TrialLimitExceededError, consume_trial_or_raise, write_registration_request, build_registration_request
+from redaction_assistant.cli import main
+from redaction_assistant.local_service import handle_request, validate_request_headers
 
 
-def test_signed_license_v2_rejects_tampering():
-    private_key = Ed25519PrivateKey.generate()
-    private_key_b64 = base64.b64encode(private_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())).decode("ascii")
-    public_key_b64 = base64.b64encode(private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)).decode("ascii")
-    license_data = create_local_license("客户A", expires_on="2099-12-31", features=["build_package"], issuer_private_key_b64=private_key_b64)
-
-    assert license_data["schema_version"] == "document_redaction_local_license.v2"
-    assert "signature" in license_data
-    assert validate_local_license(license_data, today=date(2026, 1, 1), public_key_b64=public_key_b64)["status"] == "valid"
-
-    tampered = dict(license_data)
-    tampered["features"] = ["build_package", "batch_build"]
-    result = validate_local_license(tampered, today=date(2026, 1, 1), public_key_b64=public_key_b64)
-    assert result["status"] == "invalid"
-    assert "签名" in result["message"]
+def test_unsigned_service_requests_are_rejected_by_header_contract():
+    assert validate_request_headers({}, "{}") is False
+    assert validate_request_headers({"X-DRA-Timestamp": "1", "X-DRA-Signature": "deadbeef"}, "{}") is False
 
 
-def test_license_signing_requires_external_issuer_private_key(monkeypatch):
-    monkeypatch.delenv("DRA_LICENSE_ISSUER_PRIVATE_KEY_B64", raising=False)
+def test_legacy_trial_and_license_artifacts_are_inert(tmp_path: Path):
+    legacy = tmp_path / "registration"
+    legacy.mkdir()
+    (legacy / "license.json").write_text('{"schema_version": "document_redaction_local_license.v1"}', encoding="utf-8")
+    (legacy / "trial_usage_community.json").write_text('{"used_files": 50}', encoding="utf-8")
+    (legacy / "registration_request.json").write_text('{"email": "old@example.com"}', encoding="utf-8")
+    before = sorted(p.name for p in legacy.iterdir())
 
-    with pytest.raises(LicenseSigningKeyMissingError):
-        create_local_license("客户A", expires_on="2099-12-31")
+    assert main(["trial-status", "--registration-dir", str(legacy)]) == 0
+    assert main(["registration-request", "--email", "x@example.com", "--out", str(legacy)]) == 0
 
-
-def test_legacy_v1_license_has_migration_status():
-    legacy = {
-        "schema_version": "document_redaction_local_license.v1",
-        "customer_name": "旧客户",
-        "expires_on": "2099-12-31",
-        "features": ["build_package"],
-    }
-
-    result = validate_local_license(legacy, today=date(2026, 1, 1))
-
-    assert result["status"] == "legacy_migration_required"
-    assert result["features"] == ["build_package"]
+    after = sorted(p.name for p in legacy.iterdir())
+    assert before == after
 
 
-def test_trial_usage_hmac_detects_tampering(tmp_path: Path):
-    write_registration_request(tmp_path, build_registration_request(email="user@example.com"))
-    consume_trial_or_raise(1, registration_dir=tmp_path)
-    usage_path = tmp_path / "trial_usage_community.json"
-    data = json.loads(usage_path.read_text(encoding="utf-8"))
-    assert "signature" in data
+def test_no_gate_files_are_created_by_build_package(tmp_path: Path):
+    source = tmp_path / "input.txt"
+    source.write_text("项目名称：南网示范项目。合同金额：350万元。", encoding="utf-8")
+    response = handle_request({
+        "action": "build_package",
+        "project_alias_id": "SEC-TRIAL",
+        "out": str(tmp_path / "out"),
+        "files": [str(source)],
+    })
+    assert response["success"] is True
 
-    data["used_files"] = 0
-    usage_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    try:
-        consume_trial_or_raise(1, registration_dir=tmp_path)
-    except TrialLimitExceededError as exc:
-        assert "试用记录校验失败" in str(exc)
-    else:
-        raise AssertionError("tampered usage should be rejected")
+    created = {p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*")}
+    assert not any("trial_usage_" in name for name in created)
+    assert not any(name.endswith("license.json") for name in created)
+    assert not any(name.endswith("registration_request.json") for name in created)

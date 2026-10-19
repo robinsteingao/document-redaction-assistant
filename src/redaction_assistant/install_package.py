@@ -8,7 +8,6 @@ from pathlib import Path
 
 from .desktop_shell import build_desktop_shell
 from .installer_assets import build_installer_assets
-from .local_license import write_license_placeholder
 from .offline_runtime import build_ocr_engine_assets, build_runtime_assets
 from .rules_package import build_rules_assets
 
@@ -68,7 +67,6 @@ def build_install_package(
     _write(app_dir / "build_production_sandbox_config.bat", _production_sandbox_config_bat())
     _write(app_dir / "run_acceptance_smoke.bat", _acceptance_smoke_bat())
     build_rules_assets(app_dir / "rules", version=version)
-    write_license_placeholder(app_dir / "license" / "local_license.json")
     build_runtime_assets(app_dir / "runtime", version=version)
     build_ocr_engine_assets(app_dir / "ocr_engines", version=version)
     build_installer_assets(package_dir, version=version)
@@ -86,9 +84,7 @@ def build_install_package(
             "must_read_doc": "使用必读.doc",
             "sample_self_test": "app\\run_sample_self_test.bat",
             "runtime_preflight": "app\\check_runtime.bat",
-            "registration": "app\\register_community.bat",
             "local_install": "app\\install_local.bat",
-            "local_license": "app\\activate_local_license.bat",
             "rules_update": "app\\apply_rules_update.bat",
             "runtime_stage": "app\\stage_python_runtime.bat",
             "ocr_wheelhouse": "app\\build_ocr_wheelhouse.bat",
@@ -119,15 +115,12 @@ def build_install_package(
         "runtime_assets": {
             "runtime_manifest": "app\\runtime\\runtime_manifest.json",
             "ocr_engine_manifest": "app\\ocr_engines\\ocr_engine_manifest.json",
-            "local_license": "app\\license\\local_license.json",
         },
         "capabilities": [
             "runtime_preflight",
-            "local_license",
             "rules_update_manifest",
             "ocr_engine_bundle_manifest",
             "sample_self_test",
-            "registration_trial_gate",
             "installer_shell",
             "customer_acceptance_package",
             "pilot_operations",
@@ -170,7 +163,6 @@ setlocal
 set "APP_DIR=%~dp0"
 set "PYTHONPATH=%APP_DIR%src"
 set "EMBEDDED_PY=%APP_DIR%runtime\\python\\python.exe"
-if not defined DRA_REGISTRATION_DIR set "DRA_REGISTRATION_DIR=%APP_DIR%..\\registration"
 
 if exist "%APP_DIR%ocr_engines\\offline_ocr_installed.marker.json" (
   if exist "%APP_DIR%ocr_engines\\offline_ocr_env.bat" (
@@ -210,7 +202,6 @@ def _start_service_bat(service_secret: str) -> str:
     return f"""@echo off
 setlocal
 cd /d "%~dp0"
-set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
 set "DRA_LOCAL_SERVICE_SECRET={service_secret}"
 call run_cli.bat serve-local --host 127.0.0.1 --port 8765
 """
@@ -220,7 +211,6 @@ def _start_desktop_app_bat(service_secret: str) -> str:
     return f"""@echo off
 setlocal
 cd /d "%~dp0"
-set "DRA_REGISTRATION_DIR=%~dp0..\\registration"
 set "DRA_LOCAL_SERVICE_SECRET={service_secret}"
 rem launch-desktop-app starts the local service and opens desktop_shell\\index.html
 call run_cli.bat launch-desktop-app --app-dir "." --host 127.0.0.1 --port 8765 --wait-seconds 12
@@ -236,21 +226,8 @@ if errorlevel 1 (
 def _register_community_bat() -> str:
     return """@echo off
 setlocal
-cd /d "%~dp0"
-set "EMAIL=%~1"
-if "%EMAIL%"=="" (
-  echo 请输入注册邮箱。个人版注册费用为每年80元，注册申请生成后可先试用50个文件。
-  set /p EMAIL=注册邮箱:
-)
-if "%EMAIL%"=="" (
-  echo REGISTRATION_EMAIL_REQUIRED
-  exit /b 2
-)
-call run_cli.bat registration-request --edition community --email "%EMAIL%" --out "..\\registration"
-if errorlevel 1 exit /b 1
-echo REGISTRATION_REQUEST_CREATED
-echo 注册申请目录: %~dp0..\\registration
-echo 请按 registration_mailto.txt 提示联系作者获取年度授权 license.json（个人版80元/年）。
+echo 自 0.27.0 起本软件已完全开源，不再需要注册、试用额度或授权文件，全部功能直接可用。
+echo 本脚本保留仅为兼容旧版说明，不执行任何操作。
 exit /b
 """
 
@@ -262,9 +239,7 @@ cd /d "%~dp0"
 if not exist "..\\generated" mkdir "..\\generated"
 call check_runtime.bat
 if errorlevel 1 exit /b 1
-call run_cli.bat registration-request --edition community --email "sample@example.com" --out "..\\generated\\sample_registration"
-if errorlevel 1 exit /b 1
-call run_cli.bat batch-build --input-root "..\\sample_data" --out "..\\generated\\sample_out" --mapping-passphrase "sample-local-passphrase" --registration-dir "..\\generated\\sample_registration"
+call run_cli.bat batch-build --input-root "..\\sample_data" --out "..\\generated\\sample_out" --mapping-passphrase "sample-local-passphrase"
 if errorlevel 1 exit /b 1
 call run_cli.bat ocr-status
 if errorlevel 1 exit /b 1
@@ -288,8 +263,6 @@ setlocal
 cd /d "%~dp0"
 call check_runtime.bat
 if errorlevel 1 exit /b 1
-call activate_local_license.bat
-if errorlevel 1 exit /b 1
 echo INSTALL_READINESS_OK
 echo Open desktop shell: %~dp0desktop_shell\\index.html
 """
@@ -298,8 +271,8 @@ echo Open desktop shell: %~dp0desktop_shell\\index.html
 def _activate_license_bat() -> str:
     return """@echo off
 setlocal
-cd /d "%~dp0"
-call run_cli.bat validate-license --input ".\\license\\local_license.json"
+echo 自 0.27.0 起本软件不再需要授权文件，local_license.json 已从安装包中移除。
+echo 本脚本保留仅为兼容旧版说明，不执行任何操作。
 exit /b
 """
 
@@ -417,8 +390,8 @@ def _start_here(version: str) -> str:
 验收顺序:
 
 1. 双击或在 PowerShell 中运行 `app\\start_desktop_app.bat`，由脚本启动本地服务并打开产品页面。
-2. 首次正式处理文件前，运行 `app\\register_community.bat` 并填写邮箱。个人版注册费用为 **80元/年**；生成注册申请后可先试用 50 个文件。
-3. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json` 并校验本地授权。
+2. 本软件已完全开源，无需注册、试用额度或授权文件，全部功能直接可用（旧版 `register_community.bat` 已停用，仅提示）。
+3. 如需安装预检，运行 `app\\install_local.bat`，生成 `generated\\runtime_report.json`。
 4. 运行 `app\\run_sample_self_test.bat`。
 5. 查看 `generated\\sample_out\\batch_manifest.json` 是否生成。
 6. 如需单独测试本地服务，运行 `app\\start_local_service.bat`，再在桌面壳中检查 OCR。
@@ -438,8 +411,7 @@ def _start_here(version: str) -> str:
 - 未安装 OCR 时不影响非扫描件（DOCX、XLSX、文本型 PDF、TXT）的正常处理。
 - OCR 插件边界见 `app\\rules\\ocr_plugin_manifest.json`。
 - 离线运行时边界见 `app\\runtime\\runtime_manifest.json`。
-- 本地授权文件见 `app\\license\\local_license.json`。
-- 本地映射表以 local_mapping.private.enc 加密保存在客户本机，不进入上传包。
+- 本地映射表以 local_mapping.private.enc 加密保存在客户本机，不进入上传包；加密口令由客户自行保存。
 """
 
 

@@ -1,8 +1,11 @@
 # Core source edition dependencies
 #
-# The current source edition is intentionally lightweight. XML-based Office
-# parsing uses defusedxml to reject XXE/entity expansion payloads.
+# Core dependencies: pypdf for text-PDF extraction, defusedxml to reject
+# XXE/entity expansion payloads in XML-based Office parsing, cryptography for
+# the encrypted local mapping (v2 envelope; v1 envelopes remain readable).
 # Optional OCR dependencies are listed in requirements-ocr-rapidocr.txt and
 # requirements-ocr-paddle.txt.
+# Optional Office external-copy validation: requirements-external-release.txt.
+pypdf>=4.0.0
 defusedxml>=0.7.1
 cryptography>=41.0.0,<43

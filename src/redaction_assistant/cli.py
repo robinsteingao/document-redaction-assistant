@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 from .acceptance import run_acceptance_smoke
-from .batch import SUPPORTED_SUFFIXES, build_batch_packages
+from .batch import build_batch_packages
 from .commercial_package import build_commercial_install_package, validate_commercial_install_package
 from .crypto import decrypt_mapping_file, encrypt_mapping_file
 from .review import build_review_workspace, export_review_workspace, review_decisions_from_mapping
@@ -16,7 +15,6 @@ from .workflow import build_redaction_package, restore_text, write_package
 from .desktop_shell import build_desktop_shell
 from .desktop_launcher import launch_desktop_app
 from .install_package import build_install_package
-from .local_license import LicenseSigningKeyMissingError, validate_local_license, write_local_license
 from .local_service import run_local_service
 from .ocr_adapter import extract_text_with_ocr, get_ocr_status
 from .offline_ocr_install import (
@@ -31,13 +29,11 @@ from .report_delivery import build_report_delivery_package
 from .runtime_preflight import run_runtime_preflight, write_runtime_preflight_report
 from .rules_update import apply_rules_update_package, validate_rules_update_package
 from .open_source_preflight import run_open_source_release_preflight
-from .registration import (
-    RegistrationRequiredError,
-    TrialLimitExceededError,
-    build_registration_request,
-    consume_trial_or_raise,
-    registration_status,
-    write_registration_request,
+
+
+_NO_LICENSE_NOTICE = (
+    "自 0.27.0 起本软件已完全开源：不再需要注册、年度授权或试用额度，全部功能直接可用。"
+    "本命令已停用，未执行任何操作。"
 )
 
 
@@ -52,8 +48,6 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--review-decisions")
     build.add_argument("--customer-confirmed-degradation-risk", action="store_true")
     build.add_argument("--mapping-passphrase", help="Encrypt local_mapping.private.json into local_mapping.private.enc and remove the plaintext mapping.")
-    build.add_argument("--registration-dir", help="Local registration directory; defaults to ~/.document_redaction_assistant")
-    build.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
     build.add_argument("files", nargs="+")
 
     review = sub.add_parser("review-workspace", help="Build local review candidates and HTML workspace.")
@@ -71,8 +65,6 @@ def main(argv: list[str] | None = None) -> int:
     batch.add_argument("--input-root", required=True)
     batch.add_argument("--out", required=True)
     batch.add_argument("--mapping-passphrase")
-    batch.add_argument("--registration-dir", help="Local registration directory; defaults to ~/.document_redaction_assistant")
-    batch.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
 
     encrypt = sub.add_parser("encrypt-mapping", help="Encrypt and remove a local mapping JSON file.")
     encrypt.add_argument("--input", required=True)
@@ -133,26 +125,26 @@ def main(argv: list[str] | None = None) -> int:
     preflight_os.add_argument("--root", default=".", help="Package root to scan (default: current directory)")
     preflight_os.add_argument("--output", help="Optional output JSON file path; if omitted, prints JSON to stdout")
 
-    license_write = sub.add_parser("write-license", help="Write a local trial license file.")
-    license_write.add_argument("--output", required=True)
+    license_write = sub.add_parser("write-license", help="Deprecated: licenses are no longer required.")
+    license_write.add_argument("--output")
     license_write.add_argument("--customer-name", default="本地试点客户")
     license_write.add_argument("--expires-on", default="2099-12-31")
 
-    license_validate = sub.add_parser("validate-license", help="Validate a local license file.")
-    license_validate.add_argument("--input", required=True)
+    license_validate = sub.add_parser("validate-license", help="Deprecated: licenses are no longer required.")
+    license_validate.add_argument("--input")
 
-    registration = sub.add_parser("registration-request", help="Build a local registration request. Personal registration fee: 80 CNY/year.")
-    registration.add_argument("--out", required=True)
-    registration.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
-    registration.add_argument("--email", required=True)
+    registration = sub.add_parser("registration-request", help="Deprecated: registration is no longer required.")
+    registration.add_argument("--out")
+    registration.add_argument("--edition")
+    registration.add_argument("--email")
     registration.add_argument("--organization", default="")
     registration.add_argument("--name", default="")
     registration.add_argument("--phone", default="")
     registration.add_argument("--use-case", default="")
 
-    trial_status = sub.add_parser("trial-status", help="Show local registration, trial quota and license status.")
+    trial_status = sub.add_parser("trial-status", help="Deprecated: no trial quota or license status is tracked.")
     trial_status.add_argument("--registration-dir")
-    trial_status.add_argument("--edition", choices=["community", "stpe_partner"], default="community")
+    trial_status.add_argument("--edition", default="community")
 
     rules_update = sub.add_parser("apply-rules-update", help="Validate and apply an offline rules update package.")
     rules_update.add_argument("--update-dir", required=True)
@@ -211,11 +203,6 @@ def main(argv: list[str] | None = None) -> int:
         decisions = None
         if args.review_decisions:
             decisions = review_decisions_from_mapping(json.loads(Path(args.review_decisions).read_text(encoding="utf-8")))
-        try:
-            consume_trial_or_raise(len(args.files), edition=args.edition, registration_dir=args.registration_dir)
-        except (RegistrationRequiredError, TrialLimitExceededError) as exc:
-            print(str(exc))
-            return 1
         package, mapping = build_redaction_package(
             args.files,
             project_alias_id=args.project_alias_id,
@@ -223,7 +210,15 @@ def main(argv: list[str] | None = None) -> int:
             review_decisions=decisions,
             customer_confirmed_degradation_risk=args.customer_confirmed_degradation_risk,
         )
-        outputs = write_package(args.out, package, mapping, mapping_passphrase=args.mapping_passphrase)
+        outputs = write_package(
+            args.out,
+            package,
+            mapping,
+            source_files=args.files,
+            customer_dictionary=args.customer_dictionary,
+            review_decisions=decisions,
+            mapping_passphrase=args.mapping_passphrase,
+        )
         outputs.update(export_review_workspace(args.out, package, mapping))
         sandbox_path = Path(args.out) / "sandbox_import_package.json"
         sandbox_path.write_text(json.dumps(build_sandbox_import_package(package), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -253,12 +248,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "batch-build":
-        total_files = _count_batch_files(args.input_root)
-        try:
-            consume_trial_or_raise(total_files, edition=args.edition, registration_dir=args.registration_dir)
-        except (RegistrationRequiredError, TrialLimitExceededError) as exc:
-            print(str(exc))
-            return 1
         manifest = build_batch_packages(args.input_root, args.out, passphrase=args.mapping_passphrase)
         print(f"batch_manifest: {Path(args.out) / 'batch_manifest.json'}")
         print(f"project_count: {manifest['project_count']}")
@@ -354,41 +343,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "passed" else 1
 
     if args.command == "write-license":
-        if os.getenv("DRA_ENABLE_LICENSE_ISSUER") != "1":
-            print("write-license is disabled in the public build. 请联系作者获取年度授权 license.json（个人版80元/年）。")
-            return 1
-        try:
-            path = write_local_license(args.output, customer_name=args.customer_name, expires_on=args.expires_on)
-        except LicenseSigningKeyMissingError as exc:
-            print(str(exc))
-            return 1
-        print(f"local_license: {path}")
+        print(_NO_LICENSE_NOTICE)
         return 0
 
     if args.command == "validate-license":
-        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-        result = validate_local_license(data)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["status"] == "valid" else 1
+        print(_NO_LICENSE_NOTICE)
+        return 0
 
     if args.command == "registration-request":
-        request = build_registration_request(
-            edition=args.edition,
-            email=args.email,
-            organization=args.organization,
-            name=args.name,
-            phone=args.phone,
-            use_case=args.use_case,
-        )
-        outputs = write_registration_request(args.out, request)
-        for name, path in outputs.items():
-            print(f"{name}: {path}")
-        print(f"annual_fee_cny: {request['annual_fee_cny']}")
-        print(f"trial_file_limit: {request['trial_file_limit']}")
+        print(_NO_LICENSE_NOTICE)
         return 0
 
     if args.command == "trial-status":
-        print(json.dumps(registration_status(args.registration_dir, edition=args.edition), ensure_ascii=False, indent=2))
+        print(_NO_LICENSE_NOTICE)
         return 0
 
     if args.command == "validate-rules-update":
@@ -465,14 +432,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["status"] == "started" else 1
 
     return 2
-
-
-def _count_batch_files(input_root: str | Path) -> int:
-    root = Path(input_root)
-    total = 0
-    for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        total += sum(1 for p in project_dir.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES)
-    return total
 
 
 if __name__ == "__main__":

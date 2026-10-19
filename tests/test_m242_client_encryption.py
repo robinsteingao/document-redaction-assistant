@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -9,15 +9,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from redaction_assistant.crypto import decrypt_mapping_file
 from redaction_assistant.desktop_shell import build_desktop_shell
 from redaction_assistant.local_service import handle_request
-from redaction_assistant.registration import build_registration_request, write_registration_request
 
 
 def test_local_service_encrypts_mapping_when_client_passphrase_is_provided(tmp_path: Path):
-    registration_dir = tmp_path / "registration"
-    write_registration_request(
-        registration_dir,
-        build_registration_request(edition="community", email="client@example.com"),
-    )
     source = tmp_path / "input.txt"
     source.write_text("联系人：张三\n合同金额：300万元\n试运行30天，电压10kV。", encoding="utf-8")
     out = tmp_path / "out"
@@ -27,7 +21,6 @@ def test_local_service_encrypts_mapping_when_client_passphrase_is_provided(tmp_p
         "files": [str(source)],
         "out": str(out),
         "project_alias_id": "CLIENT-ENC",
-        "registration_dir": str(registration_dir),
         "mapping_passphrase": "client-passphrase",
     })
 
@@ -46,11 +39,6 @@ def test_local_service_encrypts_mapping_when_client_passphrase_is_provided(tmp_p
 
 
 def test_async_job_status_does_not_echo_mapping_passphrase(tmp_path: Path):
-    registration_dir = tmp_path / "registration"
-    write_registration_request(
-        registration_dir,
-        build_registration_request(edition="community", email="client@example.com"),
-    )
     source = tmp_path / "input.txt"
     source.write_text("联系人：张三\n合同金额：300万元", encoding="utf-8")
 
@@ -59,7 +47,6 @@ def test_async_job_status_does_not_echo_mapping_passphrase(tmp_path: Path):
         "input_paths": [str(source)],
         "out": str(tmp_path / "out"),
         "project_alias_id": "CLIENT-ENC-ASYNC",
-        "registration_dir": str(registration_dir),
         "mapping_passphrase": "do-not-echo-passphrase",
     })
     assert response["success"] is True

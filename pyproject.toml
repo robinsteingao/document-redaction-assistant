@@ -1,11 +1,26 @@
 [project]
 name = "document-redaction-assistant"
-version = "0.1.0"
+version = "0.27.0"
 description = "Local document redaction assistant for STPE-AI assessment-preserving uploads."
 requires-python = ">=3.10"
 dependencies = [
+  "pypdf>=4.0.0",
   "defusedxml>=0.7.1",
   "cryptography>=41.0.0,<43",
+]
+
+[project.optional-dependencies]
+external-release = [
+  "lxml>=4.9.3",
+  "python-docx>=1.1.2",
+  "openpyxl>=3.1.2",
+]
+test = [
+  "pytest>=8.0",
+  "lxml>=4.9.3",
+  "python-docx>=1.1.2",
+  "openpyxl>=3.1.2",
+  "Pillow>=10.0",
 ]
 
 [project.scripts]
