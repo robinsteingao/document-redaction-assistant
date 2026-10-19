@@ -3,7 +3,7 @@
 > 版本：0.26.0
 > 日期：2026-10-15
 > 范围：文档安全脱敏助手独立支线。不改变 STPE-AI 主系统评分、TRL、readiness、数据库 schema 或报告强结论。
-> 验证：`python -m pytest products/document_redaction_assistant/tests -q`，160 passed。
+> 验证：`python -m pytest tests -q`，160 passed。
 
 ## 变化
 

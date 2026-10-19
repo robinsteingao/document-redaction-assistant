@@ -18,10 +18,10 @@ M19 解决真实应用测试暴露的 PDF OCR 断点：OCR 引擎已经可用，
 
 测试文件:
 
-- `C:\Users\spook\Desktop\wipo_pub_946.pdf`
-- `C:\Users\spook\Desktop\wipo-2024 绘制创新图景专利和可持续发展目标.pdf`
-- `C:\Users\spook\Desktop\项目实施计划及报价表-科技成果转化模式及激励机制研究（质押融资与作价入股专题）.xlsx`
-- `C:\Users\spook\Desktop\附件1：科技成果转化模式及激励机制研究（质押融资与作价入股专题）-技术服务委托函-6至9月16万版-v2.docx`
+- `<测试目录>\wipo_pub_946.pdf`（WIPO 公开文件）
+- `<测试目录>\wipo-2024 绘制创新图景专利和可持续发展目标.pdf`（WIPO 公开报告）
+- `<测试目录>\项目实施计划及报价表（客户信息已隐去）.xlsx`
+- `<测试目录>\技术服务委托函（客户信息已隐去）-v2.docx`
 
 结果:
 
@@ -29,7 +29,7 @@ M19 解决真实应用测试暴露的 PDF OCR 断点：OCR 引擎已经可用，
 - 限制 PDF 前 2 页 OCR 时，两个 PDF 置信度均约 0.99。
 - 四文件上传包结果为 `source_file_count=4`、`redacted_text_blocks=44`、`field_mapping_stats.total_fields=4`。
 - 上传包不包含原始文件和本地映射表。
-- 最终 runtime-ready 压缩包为 `products\document_redaction_assistant\.release_demo_m19_runtime_ready\document_redaction_assistant_install_0.19.0-m19_runtime_ready.zip`，大小 `407,243,624` 字节。
+- 最终 runtime-ready 压缩包为 `<发布快照目录>\document_redaction_assistant_install_0.19.0-m19_runtime_ready.zip`，大小 `407,243,624` 字节。
 
 ## 当前边界
 

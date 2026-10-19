@@ -12,10 +12,10 @@ M21 已解决“安装后点击入口不能进入工作状态”的核心启动�
 
 ## 2. 测试环境与安装包
 
-- 发布包路径：`products\document_redaction_assistant\.release_demo_m21_runtime_ready\document_redaction_assistant_install_0.21.0-m21_runtime_ready.zip`
+- 发布包路径：`<发布快照目录>\document_redaction_assistant_install_0.21.0-m21_runtime_ready.zip`
 - 发布包大小：`407,241,488` 字节
-- 独立测试目录：`C:\tmp\dra_m21_user_e2e_20260525_151714`
-- 解压后应用目录：`C:\tmp\dra_m21_user_e2e_20260525_151714\document_redaction_assistant_install_0.21.0-m21`
+- 独立测试目录：`<本地临时目录>\dra_user_e2e_副本`
+- 解压后应用目录：`<本地临时目录>\dra_user_e2e_副本\document_redaction_assistant_install_0.21.0-m21`
 - 启动入口：`app\start_desktop_app.bat`
 - 本地服务地址：`http://127.0.0.1:8765`
 
@@ -52,7 +52,7 @@ M21 已解决“安装后点击入口不能进入工作状态”的核心启动�
 
 ```text
 ProcessId: 27532
-ExecutablePath: D:\tmp\m18\document_redaction_assistant_install_0.18.0-m18\app\runtime\python\python.exe
+ExecutablePath: <本地临时目录>\document_redaction_assistant_install_0.18.0-m18\app\runtime\python\python.exe
 CommandLine: ... serve-local --host 127.0.0.1 --port 8765
 ```
 
@@ -77,7 +77,7 @@ app\start_desktop_app.bat
 
 ```text
 PORT_AFTER=27172
-ExecutablePath: C:\tmp\dra_m21_user_e2e_20260525_151714\document_redaction_assistant_install_0.21.0-m21\app\runtime\python\python.exe
+ExecutablePath: <本地临时目录>\dra_user_e2e_副本\document_redaction_assistant_install_0.21.0-m21\app\runtime\python\python.exe
 CommandLine: ... -m redaction_assistant.cli serve-local --host 127.0.0.1 --port 8765
 ```
 

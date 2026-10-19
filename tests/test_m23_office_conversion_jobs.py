@@ -24,7 +24,7 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
             (root / "legacy.doc").write_bytes(b"legacy")
             (root / "legacy.xls").write_bytes(b"legacy")
             (root / "legacy.wps").write_bytes(b"legacy")
-            (root / "notes.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            (root / "notes.txt").write_text("项目名称：示范电网项目", encoding="utf-8")
 
             plan = collect_user_inputs([root])
 
@@ -72,7 +72,7 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
             source = root / "source"
             source.mkdir()
             for idx in range(20):
-                (source / f"file_{idx:02d}.txt").write_text(f"项目名称：南网示范项目{idx}", encoding="utf-8")
+                (source / f"file_{idx:02d}.txt").write_text(f"项目名称：示范电网项目{idx}", encoding="utf-8")
 
             def slow_build(*args, **kwargs):
                 progress_cb = kwargs.get("progress_cb")
@@ -109,7 +109,7 @@ class M23OfficeConversionAndJobControlTests(unittest.TestCase):
             root = Path(td)
             source = root / "source"
             source.mkdir()
-            (source / "project.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            (source / "project.txt").write_text("项目名称：示范电网项目", encoding="utf-8")
             attempts = {"count": 0}
 
             def flaky_outputs(*args, **kwargs):

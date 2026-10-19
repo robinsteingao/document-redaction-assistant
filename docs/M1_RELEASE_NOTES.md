@@ -6,7 +6,7 @@
 
 ## 已完成
 
-- 建立独立产品目录 `products/document_redaction_assistant`。
+- 建立独立产品目录（现为独立仓）。
 - 实现 DOCX、XLSX、文本型 PDF、TXT、Markdown 的本地解析入口。
 - 实现本地规则识别和稳定占位符映射。
 - 实现金额区间化，避免经济效益字段完全丢失。

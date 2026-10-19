@@ -19,14 +19,14 @@
 - 至少 2 个 `.xls` 文件：优先包含预算、效益、人员或项目台账字段。
 - 至少 2 个 `.wps` 文件：优先包含项目说明、合同、验收或管理材料。
 - 样本必须使用副本目录，不直接处理原始收资目录。
-- 样本目录建议放置于短路径，例如：`C:\tmp\dra_m24_xls_wps_samples_YYYYMMDD`。
+- 样本目录建议放置于短路径，例如：`<本地临时目录>\dra_m24_xls_wps_samples_YYYYMMDD`。
 
 ## 允许修改范围（后续执行时）
 
-- `products/document_redaction_assistant/tests/test_m23_office_conversion_jobs.py`
-- `products/document_redaction_assistant/docs/M24_REAL_SAMPLE_TEST_REPORT.md`
-- `products/document_redaction_assistant/docs/M24_RELEASE_NOTES.md`
-- `products/document_redaction_assistant/README.md` 的后续版本段落
+- `tests/test_m23_office_conversion_jobs.py`
+- `docs/M24_REAL_SAMPLE_TEST_REPORT.md`
+- `docs/M24_RELEASE_NOTES.md`
+- `README.md` 的后续版本段落
 
 ## 禁止修改范围
 
@@ -42,8 +42,8 @@
 ## 建议验收命令（后续执行时）
 
 ```powershell
-python -m pytest products/document_redaction_assistant/tests/test_m23_office_conversion_jobs.py -v
-python -m pytest products/document_redaction_assistant/tests/
+python -m pytest tests/test_m23_office_conversion_jobs.py -v
+python -m pytest tests/
 ```
 
 真实样本验证需补充手工记录：

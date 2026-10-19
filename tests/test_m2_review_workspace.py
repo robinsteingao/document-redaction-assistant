@@ -72,7 +72,7 @@ class M2ReviewWorkspaceTests(unittest.TestCase):
             source = root / "input.txt"
             source.write_text(
                 "项目名称：配网智能监测项目。\n"
-                "承担单位：国网四川省电力公司。\n"
+                "承担单位：示例省电力公司。\n"
                 "合同金额：350万元。\n"
                 "技术指标：10kV线路故障定位误差≤1%，现场试运行30天。\n",
                 encoding="utf-8",

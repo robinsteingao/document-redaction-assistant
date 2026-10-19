@@ -2,11 +2,11 @@
 
 > 日期: 2026-05-25
 > 产品: 文档安全脱敏助手 `v0.23.0-m23`
-> 测试目标: 旧版 Office/WPS 自动转换、后台任务取消/重试入口、M22 南网样本副本全链路复测。
+> 测试目标: 旧版 Office/WPS 自动转换、后台任务取消/重试入口、M22 真实客户样本副本全链路复测。
 
 ## 核心结论
 
-M23 已解决 M22 的关键遗留问题: 旧版 `.doc` 不再只停留在“需转换”提示，而是在本地自动转换为 `.docx` 后进入脱敏处理链路。使用南网样本副本复测时，39 个原可处理文件加 6 个 `.doc` 转换文件全部入包，任务完成状态为 `completed`。
+M23 已解决 M22 的关键遗留问题: 旧版 `.doc` 不再只停留在“需转换”提示，而是在本地自动转换为 `.docx` 后进入脱敏处理链路。使用真实客户样本副本复测时，39 个原可处理文件加 6 个 `.doc` 转换文件全部入包，任务完成状态为 `completed`。
 
 ## 实现范围
 
@@ -31,10 +31,10 @@ M23 已解决 M22 的关键遗留问题: 旧版 `.doc` 不再只停留在“需�
 
 ## 真实样本复测
 
-- 样本副本: `C:\tmp\dra_m21_nanwang_samples_20260525_153902`
+- 样本副本: `<本地临时目录>\dra_真实样本副本`
 - 原始样本目录: 只读，不直接处理。
-- M23 包: `C:\tmp\dra_m23_build_fixed\document_redaction_assistant_install_0.23.0-m23`
-- runtime-ready 包: `products\document_redaction_assistant\.release_demo_m23_runtime_ready\document_redaction_assistant_install_0.23.0-m23_runtime_ready.zip`
+- M23 包: `<本地临时目录>\dra_m23_build\document_redaction_assistant_install_0.23.0-m23`
+- runtime-ready 包: `<发布快照目录>\document_redaction_assistant_install_0.23.0-m23_runtime_ready.zip`
 - 包大小: `324,178,343` 字节
 
 ### 预检结果

@@ -73,7 +73,7 @@ class M1WorkflowTests(unittest.TestCase):
             pdf = root / "contract.pdf"
             write_minimal_docx(
                 docx,
-                "项目名称：配网智能监测项目。承担单位：国网四川省电力公司。"
+                "项目名称：配网智能监测项目。承担单位：示例省电力公司。"
                 "技术指标：10kV线路故障定位误差≤1%，现场试运行30天。",
             )
             write_minimal_xlsx(
@@ -91,7 +91,7 @@ class M1WorkflowTests(unittest.TestCase):
         serialized_mapping = json.dumps(mapping, ensure_ascii=False)
 
         self.assertNotIn("配网智能监测项目", serialized_package)
-        self.assertNotIn("国网四川省电力公司", serialized_package)
+        self.assertNotIn("示例省电力公司", serialized_package)
         self.assertNotIn("HT-2026-001", serialized_package)
         self.assertNotIn("13812345678", serialized_package)
         self.assertIn("项目A", serialized_package)
@@ -102,7 +102,7 @@ class M1WorkflowTests(unittest.TestCase):
         self.assertIn("≤1%", serialized_package)
         self.assertIn("30天", serialized_package)
         self.assertIn("配网智能监测项目", serialized_mapping)
-        self.assertIn("国网四川省电力公司", serialized_mapping)
+        self.assertIn("示例省电力公司", serialized_mapping)
         self.assertEqual(package["project_alias_id"], "2026-STPE-001")
         self.assertTrue(package["analysis_preservation_flags"]["trl_factors_preserved"])
         self.assertTrue(package["analysis_preservation_flags"]["benefit_factors_preserved"])
@@ -112,14 +112,14 @@ class M1WorkflowTests(unittest.TestCase):
         mapping = {
             "items": [
                 {"placeholder": "项目A", "original": "配网智能监测项目"},
-                {"placeholder": "单位A", "original": "国网四川省电力公司"},
+                {"placeholder": "单位A", "original": "示例省电力公司"},
                 {"placeholder": "金额区间A", "original": "350万元"},
             ]
         }
 
         restored = restore_text("项目A由单位A承担，合同金额为金额区间A。", mapping)
 
-        self.assertEqual(restored, "配网智能监测项目由国网四川省电力公司承担，合同金额为350万元。")
+        self.assertEqual(restored, "配网智能监测项目由示例省电力公司承担，合同金额为350万元。")
 
 
 if __name__ == "__main__":

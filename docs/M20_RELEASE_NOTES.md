@@ -29,6 +29,6 @@ M20 将 M19 的真实运行验证固化为包内可重复执行的验收自检�
 
 - 文档安全脱敏助手 M1-M20 自动化测试: `53/53 OK`
 - 沙箱导入 API 测试: `4/4 OK`
-- 最终 runtime-ready 压缩包: `products\document_redaction_assistant\.release_demo_m20_runtime_ready\document_redaction_assistant_install_0.20.0-m20_runtime_ready.zip`
+- 最终 runtime-ready 压缩包: `<发布快照目录>\document_redaction_assistant_install_0.20.0-m20_runtime_ready.zip`
 - 压缩包大小: `407,256,116` 字节
 - 最终 zip 解压包: M20 验收自检、离线 OCR 启用校验、真实 PDF OCR、桌面四文件入包样例测试均通过。

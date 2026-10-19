@@ -22,7 +22,7 @@
 
 ## 真实样本测试
 
-- 样本副本: `C:\tmp\dra_m21_nanwang_samples_20260525_153902`
+- 样本副本: `<本地临时目录>\dra_真实样本副本`
 - 可处理文件: `39`
 - 旧版 `.doc` 待转换: `6`
 - 跳过文件: `1`
@@ -37,7 +37,7 @@
 - 脱敏沙箱导入 API 测试: `4/4 OK`
 - 商业包校验: `status=valid`
 - 离线 OCR 安装: 成功
-- runtime-ready 压缩包: `products\document_redaction_assistant\.release_demo_m22_runtime_ready\document_redaction_assistant_install_0.22.0-m22_runtime_ready.zip`
+- runtime-ready 压缩包: `<发布快照目录>\document_redaction_assistant_install_0.22.0-m22_runtime_ready.zip`
 - 压缩包大小: `299,665,674` 字节
 
 ## 边界

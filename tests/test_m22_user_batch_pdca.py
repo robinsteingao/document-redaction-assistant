@@ -23,7 +23,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
     def test_directory_input_plan_marks_doc_for_conversion_and_skips_noise(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            (root / "project.docx").write_bytes(_docx_bytes("项目名称：南网示范项目"))
+            (root / "project.docx").write_bytes(_docx_bytes("项目名称：示范电网项目"))
             (root / "legacy.doc").write_bytes(b"legacy office content")
             (root / "archive.zip").write_bytes(b"zip")
             (root / "copy_manifest.json").write_text("{}", encoding="utf-8")
@@ -69,7 +69,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
             root = Path(td)
             first = root / "a.txt"
             second = root / "b.txt"
-            first.write_text("项目名称：南网示范项目\n合同金额：100万元", encoding="utf-8")
+            first.write_text("项目名称：示范电网项目\n合同金额：100万元", encoding="utf-8")
             second.write_text("承担单位：广东电网有限责任公司", encoding="utf-8")
 
             package, _mapping = build_redaction_package(
@@ -89,7 +89,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
             root = Path(td)
             source = root / "source"
             source.mkdir()
-            (source / "project.txt").write_text("项目名称：南网示范项目\n合同金额：100万元", encoding="utf-8")
+            (source / "project.txt").write_text("项目名称：示范电网项目\n合同金额：100万元", encoding="utf-8")
             out = root / "out"
 
             started = handle_request({
@@ -122,7 +122,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
             source = root / "source"
             output_root = root / "user_documents_output"
             source.mkdir()
-            (source / "project.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            (source / "project.txt").write_text("项目名称：示范电网项目", encoding="utf-8")
 
             with patch.dict("os.environ", {"DRA_OUTPUT_ROOT": str(output_root)}):
                 response = handle_request({
@@ -141,7 +141,7 @@ class M22UserBatchPDCATest(unittest.TestCase):
     def test_plan_inputs_endpoint_matches_no_developer_user_flow(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            (root / "project.txt").write_text("项目名称：南网示范项目", encoding="utf-8")
+            (root / "project.txt").write_text("项目名称：示范电网项目", encoding="utf-8")
             response = handle_request({"action": "plan_inputs", "input_paths": [str(root)]})
 
         self.assertTrue(response["success"], response)

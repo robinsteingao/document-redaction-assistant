@@ -1,7 +1,7 @@
 # 文档安全脱敏助手 M24.2 MVP 与 M25 开发愿景
 
 > 状态：产品开发规划
-> 范围：仅适用于 `products/document_redaction_assistant` 独立支线
+> 范围：仅适用于独立产品支线（现独立仓）
 > 边界：不改变 STPE-AI 主系统评分规则、TRL/readiness 口径、数据库 schema 或报告强结论措辞
 
 ## 1. 背景

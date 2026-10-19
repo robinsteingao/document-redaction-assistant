@@ -3,17 +3,17 @@
 > 测试日期: 2026-05-25
 > 测试对象: 文档安全脱敏助手 `v0.22.0-m22`
 > 测试视角: 无软件开发经验的内部试用人员
-> 原始样本约束: `D:\项目\GKNC\2026\科技项目后评估\收资\南网后评价样本\` 仅只读枚举，不直接处理、不写入、不改名。
+> 原始样本约束: 内部真实样本目录（路径与客户名称已隐去）仅只读枚举，不直接处理、不写入、不改名。
 
 ## 核心结论
 
-M22 已把 M21 暴露的“点不动、无进度、真实目录无法判断处理范围”推进为可测试的用户闭环: 用户填写项目代号和样本文件夹后，可先预检文件，再启动后台任务，并持续看到处理进度；快速 OCR 模式下，南网样本副本 39 个可处理文件完成生成脱敏上传包、映射表、复核页和沙箱导入包。
+M22 已把 M21 暴露的“点不动、无进度、真实目录无法判断处理范围”推进为可测试的用户闭环: 用户填写项目代号和样本文件夹后，可先预检文件，再启动后台任务，并持续看到处理进度；快速 OCR 模式下，真实客户样本副本 39 个可处理文件完成生成脱敏上传包、映射表、复核页和沙箱导入包。
 
 但 M22 还不能进入外部客户正式试用，原因是旧版 `.doc/.xls/.wps` 目前只做到预检识别和拦截，尚未自动转换；大批量 PDF 完整 OCR 仍可能耗时较长。M22 后可以进入内部小范围测试，测试目标应限定为“安装启动、预检、快速模式、输出包完整性和问题反馈”。
 
 ## Plan: 用户方式与样本准备
 
-- 测试样本: 使用 M21 已复制的代表性副本目录 `C:\tmp\dra_m21_nanwang_samples_20260525_153902`，共 45 个样本文件和 1 个复制清单。
+- 测试样本: 使用 M21 已复制的代表性副本目录 `<本地临时目录>\dra_真实样本副本`，共 45 个样本文件和 1 个复制清单。
 - 原始目录: 仅做只读来源，不直接运行脱敏处理。
 - 用户动作模拟:
   - 打开安装包入口。
@@ -27,10 +27,10 @@ M22 已把 M21 暴露的“点不动、无进度、真实目录无法判断处�
 ## Do: 实测过程
 
 1. 构建新的 M22 离线商业包:
-   - 目录: `C:\tmp\dra_m22_build_fixed\document_redaction_assistant_install_0.22.0-m22`
-   - 压缩包: `C:\tmp\dra_m22_build_fixed\document_redaction_assistant_install_0.22.0-m22.zip`
+   - 目录: `<本地临时目录>\dra_m22_build\document_redaction_assistant_install_0.22.0-m22`
+   - 压缩包: `<本地临时目录>\dra_m22_build\document_redaction_assistant_install_0.22.0-m22.zip`
    - 压缩包大小: `299,665,674` 字节
-   - 交付副本: `products\document_redaction_assistant\.release_demo_m22_runtime_ready\document_redaction_assistant_install_0.22.0-m22_runtime_ready.zip`
+   - 交付副本: `<发布快照目录>\document_redaction_assistant_install_0.22.0-m22_runtime_ready.zip`
 2. 包内商业校验:
    - `app\validate_commercial_package.bat`
    - 结果: `status=valid`
@@ -52,7 +52,7 @@ M22 已把 M21 暴露的“点不动、无进度、真实目录无法判断处�
    - job_id: `5655e21e75034c7fb960ce4be4cd2fb8`
    - 任务状态: `completed`
    - 耗时: `395.30s`
-   - 输出目录: `D:\项目\GKNC\2026\科技项目后评估\项目设计\.test_tmp\m22_user_outputs\m22_nanwang_quick_output`
+   - 输出目录: `<内部测试临时目录>\m22_quick_output`
 
 ## Check: 发现问题与验证结果
 

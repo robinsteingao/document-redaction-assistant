@@ -26,6 +26,6 @@
 
 ## 验证
 
-- `python -m pytest products/document_redaction_assistant/tests/test_m24_custom_redaction_gate.py -q`：`15 passed`
-- `python -m pytest products/document_redaction_assistant/tests -q`：`86 passed`
+- `python -m pytest tests/test_m24_custom_redaction_gate.py -q`：`15 passed`
+- `python -m pytest tests -q`：`86 passed`
 - `python -m pytest prototype/tests/test_redaction_sandbox_import_api.py -q`：`4 passed`

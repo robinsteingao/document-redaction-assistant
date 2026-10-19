@@ -35,7 +35,7 @@ class EndToEndAcceptanceTests(unittest.TestCase):
             beta.mkdir(parents=True)
             (alpha / "input.txt").write_text(
                 "项目名称：配网智能监测项目。\n"
-                "承担单位：国网四川省电力公司。\n"
+                "承担单位：示例省电力公司。\n"
                 "合同编号：HT-2026-001。\n"
                 "合同金额：350万元。\n"
                 "联系电话：13812345678。\n"
@@ -71,7 +71,7 @@ class EndToEndAcceptanceTests(unittest.TestCase):
 
             package_text = package_path.read_text(encoding="utf-8")
             encrypted_text = encrypted_mapping.read_text(encoding="utf-8")
-            for sensitive in ["配网智能监测项目", "国网四川省电力公司", "HT-2026-001", "350万元", "13812345678"]:
+            for sensitive in ["配网智能监测项目", "示例省电力公司", "HT-2026-001", "350万元", "13812345678"]:
                 self.assertNotIn(sensitive, package_text)
                 self.assertNotIn(sensitive, encrypted_text)
 
@@ -87,7 +87,7 @@ class EndToEndAcceptanceTests(unittest.TestCase):
             redacted_text = "\n".join(block["text"] for block in sandbox_payload["redacted_text_blocks"])
             restored = restore_text(redacted_text, mapping)
             self.assertIn("配网智能监测项目", restored)
-            self.assertIn("国网四川省电力公司", restored)
+            self.assertIn("示例省电力公司", restored)
             self.assertIn("350万元", restored)
             self.assertIn("10kV", redacted_text)
             self.assertIn("30天", redacted_text)

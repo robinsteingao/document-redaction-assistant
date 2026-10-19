@@ -32,7 +32,7 @@ def test_legacy_trial_and_license_artifacts_are_inert(tmp_path: Path):
 
 def test_no_gate_files_are_created_by_build_package(tmp_path: Path):
     source = tmp_path / "input.txt"
-    source.write_text("项目名称：南网示范项目。合同金额：350万元。", encoding="utf-8")
+    source.write_text("项目名称：示范电网项目。合同金额：350万元。", encoding="utf-8")
     response = handle_request({
         "action": "build_package",
         "project_alias_id": "SEC-TRIAL",
