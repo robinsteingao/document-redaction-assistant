@@ -37,6 +37,17 @@ python -m pip install -e .
 
 基础源码版依赖较轻：`pypdf`、`defusedxml`、`cryptography` 为必装核心依赖，其余主要使用 Python 标准库。非扫描件的 TXT、Markdown、文本型 PDF、DOCX、XLSX 等基础处理可直接使用。
 
+### 便携包（解压即用形态）的核心依赖
+
+便携包同样需要本机 Python 3.10–3.13。构建时若提供核心依赖 wheelhouse（`DRA_CORE_WHEELHOUSE` 或 `vendor/core_wheels`），包内会携带 `app\wheels`、`app\requirements.txt` 与 `app\install_core_deps.bat`：
+
+```powershell
+# 首次使用：优先离线安装 app\wheels，离线失败才回退联网 pip
+.\app\install_core_deps.bat
+```
+
+`app\run_cli.bat` 在核心依赖缺失时会明确报错并指向该脚本，不会静默失败。wheel 形态（`pip install document_redaction_assistant-0.27.0-py3-none-any.whl`）同样需要 Python，并按 PyPI 安装核心依赖；无法联网时请改用便携包或自行提供 wheelhouse。
+
 ### Office 外发副本的额外校验依赖（工作分支安全修订）
 
 基础解析和生成脱敏文本包不等于原格式外发副本。修订后的 DOCX/XLSX 外发回写、命名空间保留和重新打开校验依赖 `lxml`、`python-docx` 与 `openpyxl`：
