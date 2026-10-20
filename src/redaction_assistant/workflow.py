@@ -15,7 +15,6 @@ from .parsers import parse_file
 from .redactor import (
     build_mapping,
     candidate_id_for,
-    merge_entities_into_mapping,
     public_mapping_stats,
     redact_text,
     restore_text,
@@ -72,18 +71,10 @@ def build_redaction_package(
                 "ocr_status": item.get("ocr_status"),
             })
 
-    entities = detect_entities_with_dictionary(
-        (block["text"] for block in blocks),
-        customer_dictionary=customer_dictionary,
-    )
+    entities = collect_entities(file_list, blocks, customer_dictionary=customer_dictionary)
     mapping = build_mapping(entities, review_decisions=review_decisions)
     # 隐藏通道字段（页眉页脚、文档属性、批注等）会随外发副本一起改写，
     # 必须并入同一份持久映射并使用全局唯一占位符，否则外发/还原会串号。
-    mapping = merge_entities_into_mapping(
-        mapping,
-        _channel_entities(file_list, customer_dictionary=customer_dictionary),
-        review_decisions=review_decisions,
-    )
     redacted_blocks = []
     for idx, block in enumerate(blocks, start=1):
         redacted_blocks.append({
@@ -143,6 +134,20 @@ def build_redaction_package(
         ),
     }
     return package, mapping
+
+
+def collect_entities(files, blocks, *, customer_dictionary=None) -> list[Entity]:
+    """映射、复核候选和评价影响使用同一实体全集，正文顺序保持稳定。"""
+    body = detect_entities_with_dictionary(
+        (block.get("text", "") for block in blocks), customer_dictionary=customer_dictionary,
+    )
+    seen = {(entity.kind, entity.original) for entity in body}
+    for entity in _channel_entities(files, customer_dictionary=customer_dictionary):
+        key = (entity.kind, entity.original)
+        if key not in seen:
+            body.append(entity)
+            seen.add(key)
+    return body
 
 
 def _channel_entities(

@@ -8,8 +8,7 @@ from typing import Any, Iterable
 from .parsers import parse_file
 from .impact import ASSESSMENT_IMPACT
 from .redactor import candidate_id_for
-from .rules import detect_entities_with_dictionary
-from .workflow import build_restore_preview, build_review_report
+from .workflow import build_restore_preview, build_review_report, collect_entities
 
 
 def build_review_workspace(
@@ -20,14 +19,12 @@ def build_review_workspace(
 ) -> dict[str, Any]:
     blocks: list[dict[str, Any]] = []
     manifest: list[dict[str, Any]] = []
-    for file in files:
+    file_list = [Path(file) for file in files]
+    for file in file_list:
         parsed_blocks, item = parse_file(Path(file))
         blocks.extend(parsed_blocks)
         manifest.append(item)
-    entities = detect_entities_with_dictionary(
-        (block.get("text", "") for block in blocks),
-        customer_dictionary=customer_dictionary,
-    )
+    entities = collect_entities(file_list, blocks, customer_dictionary=customer_dictionary)
     candidates = []
     for entity in entities:
         candidates.append({

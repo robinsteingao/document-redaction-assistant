@@ -144,8 +144,11 @@ if not exist ".\\ocr_engines\\wheelhouse" (
   echo OCR wheelhouse not found.
   exit /b 1
 )
+set "PIP_NO_INDEX=1"
+call install_core_deps.bat
+if errorlevel 1 exit /b 1
 call ".\\ocr_engines\\offline_ocr_env.bat"
-".\\runtime\\python\\python.exe" -m pip install --no-index --no-build-isolation --find-links ".\\ocr_engines\\wheelhouse" rapidocr-onnxruntime pypdfium2
+".\\runtime\\python\\python.exe" -m pip install --no-index --no-build-isolation --find-links ".\\ocr_engines\\wheelhouse" rapidocr-onnxruntime pypdfium2 lxml python-docx openpyxl
 if errorlevel 1 exit /b 1
 call run_cli.bat mark-offline-ocr-installed --app-dir "."
 exit /b

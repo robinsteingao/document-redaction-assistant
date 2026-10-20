@@ -283,7 +283,11 @@ if not defined DRA_PY (
   exit /b 1
 )
 
-%DRA_PY% -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+%DRA_PY% "%~dp0src\\redaction_assistant\\core_dependencies.py" >nul 2>nul
+if errorlevel 2 (
+  echo Incompatible Python or dependency versions. Use a dedicated environment satisfying requirements.txt; no global downgrade was attempted.
+  exit /b 1
+)
 if not errorlevel 1 (
   echo Core dependencies already available.
   echo CORE_DEPS_OK
@@ -306,7 +310,7 @@ if errorlevel 1 (
 )
 
 :deps_verify
-%DRA_PY% -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+%DRA_PY% "%~dp0src\\redaction_assistant\\core_dependencies.py"
 if errorlevel 1 (
   echo Core dependency verification failed after installation.
   exit /b 1
@@ -330,7 +334,7 @@ if exist "%APP_DIR%ocr_engines\\offline_ocr_installed.marker.json" (
 )
 
 if exist "%EMBEDDED_PY%" (
-  "%EMBEDDED_PY%" -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+  "%EMBEDDED_PY%" "%APP_DIR%src\\redaction_assistant\\core_dependencies.py" >nul 2>nul
   if errorlevel 1 goto deps_missing
   "%EMBEDDED_PY%" -m redaction_assistant.cli %*
   exit /b
@@ -340,7 +344,7 @@ where python >nul 2>nul
 if not errorlevel 1 (
   python -c "import sys" >nul 2>nul
   if not errorlevel 1 (
-    python -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+    python "%APP_DIR%src\\redaction_assistant\\core_dependencies.py" >nul 2>nul
     if errorlevel 1 goto deps_missing
     python -m redaction_assistant.cli %*
     exit /b
@@ -351,7 +355,7 @@ where py >nul 2>nul
 if not errorlevel 1 (
   py -3 -c "import sys" >nul 2>nul
   if not errorlevel 1 (
-    py -3 -c "import cryptography, pypdf, defusedxml" >nul 2>nul
+    py -3 "%APP_DIR%src\\redaction_assistant\\core_dependencies.py" >nul 2>nul
     if errorlevel 1 goto deps_missing
     py -3 -m redaction_assistant.cli %*
     exit /b

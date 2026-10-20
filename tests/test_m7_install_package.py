@@ -88,7 +88,7 @@ class M7InstallPackageTests(unittest.TestCase):
             self.assertTrue((app / "requirements.txt").exists())
             self.assertIn("--no-index", installer)
             self.assertIn("--find-links", installer)
-            self.assertIn("import cryptography, pypdf, defusedxml", run_cli)
+            self.assertIn("core_dependencies.py", run_cli)
             self.assertIn("install_core_deps.bat", run_cli)
 
     def test_build_install_package_without_wheelhouse_records_no_bundle(self):
