@@ -99,6 +99,8 @@ STPE-AI 的正式定位是“科技项目成果转化就绪度评估与推进建
 
 许可证已落盘。首发范围限定为 Windows x64：源码复验覆盖 CPython 3.10.19、3.11、3.12.12、3.13.12；离线包只验证内置 CPython 3.11.9。所有者已豁免真实反馈门槛，该豁免不是用户验收。发布不表示无隐私残留，也不覆盖 macOS/Linux。
 
+试用反馈请使用 [GitHub Issue 表单](https://github.com/robinsteingao/document-redaction-assistant/issues/new?template=feedback.yml)。只填写文字，不要上传真实文件、映射表或口令。
+
 > 说明：GitHub 仓库发布的是源码版，默认不内置 OCR 模型、Python 运行时、企业离线安装包或 `.release*` 快照。因此仓库体积较小是正常现象。扫描 PDF/图片 OCR 需要按 `docs/INSTALL_AND_OCR.md` 另行安装本地 OCR 依赖。
 
 本软件完全免费使用，无需注册或授权，直接开始使用即可。旧版命令 `registration-request`、`trial-status`、`write-license`、`validate-license` 保留名称，但仅输出停用提示，不再执行任何操作。

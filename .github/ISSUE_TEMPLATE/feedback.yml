@@ -1,0 +1,89 @@
+name: 试用反馈
+description: 提交文字反馈。不要上传真实文件、映射表或口令。
+title: "[反馈] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请只用合成样例或你自己保留在本地的低敏文件试用。本表单只收集文字，不接收附件中的真实材料。
+        离线包仅验证 Windows x64 / Python 3.11.9。工具不承诺无隐私残留。
+  - type: input
+    id: alias
+    attributes:
+      label: 试用者代号
+      description: 可用化名，不要填写真实身份证件或单位敏感信息。
+      placeholder: preview_01
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: Windows 版本、是否管理员、是否联网。
+      placeholder: Windows 11 / 非管理员 / 首次安装时联网
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: 使用形态
+      options:
+        - 源码
+        - wheel
+        - Python 3.11.9 离线包
+    validations:
+      required: true
+  - type: dropdown
+    id: completion
+    attributes:
+      label: 是否完成
+      options:
+        - 是
+        - 部分
+        - 否
+    validations:
+      required: true
+  - type: dropdown
+    id: tasks
+    attributes:
+      label: 完成的任务
+      multiple: true
+      options:
+        - A 合成样例
+        - B 复核与还原
+        - C 自有低敏文件
+        - D 边界检查
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: 结论
+      options:
+        - 顺利
+        - 小问题可绕过
+        - 明显受阻
+    validations:
+      required: true
+  - type: textarea
+    id: problems
+    attributes:
+      label: 主要问题
+      description: 每条一行，格式为“严重度 - 现象 - 复现步骤 - 期望”。严重度用阻断、高、中、低。没有问题请写“无”。
+      placeholder: 低 - 首次安装提示不够明显 - 直接双击启动 - 先提示运行安装脚本
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 过程亮点或其他建议
+      description: 可留空。不要粘贴原文、映射或口令。
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我没有上传或粘贴真实敏感文件、本地映射表或口令。
+          required: true

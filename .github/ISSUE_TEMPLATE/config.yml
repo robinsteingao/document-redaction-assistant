@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 发布说明与校验值
+    url: https://github.com/robinsteingao/document-redaction-assistant/releases/tag/v0.27.0
+    about: 先阅读首发范围。离线包只验证 Windows x64 / Python 3.11.9。
