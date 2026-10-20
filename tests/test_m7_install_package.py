@@ -42,6 +42,9 @@ class M7InstallPackageTests(unittest.TestCase):
             self.assertIn(f"{package_dir.name}/app/run_cli.bat", archive_names)
             self.assertIn(f"{package_dir.name}/app/register_community.bat", archive_names)
             self.assertIn(f"{package_dir.name}/app/desktop_shell/index.html", archive_names)
+            for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
+                self.assertEqual((ROOT / name).read_bytes(), (package_dir / name).read_bytes())
+                self.assertIn(f"{package_dir.name}/{name}", archive_names)
 
             run_cli = (package_dir / "app" / "run_cli.bat").read_text(encoding="utf-8")
             register = (package_dir / "app" / "register_community.bat").read_text(encoding="utf-8")

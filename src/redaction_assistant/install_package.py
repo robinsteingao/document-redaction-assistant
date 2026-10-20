@@ -39,6 +39,8 @@ def build_install_package(
 
     shutil.copytree(source_root / "src", app_dir / "src", ignore=_ignore_runtime_cache)
     _copy_optional(source_root / "README.md", package_dir / "README.md")
+    for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
+        shutil.copy2(source_root / name, package_dir / name)
     _copy_optional(source_root / "使用必读.txt", package_dir / "使用必读.txt")
     _copy_optional(source_root / "使用必读.doc", package_dir / "使用必读.doc")
     _copy_optional(source_root / "RELEASE_CHECKLIST.md", docs_dir / "RELEASE_CHECKLIST.md")
