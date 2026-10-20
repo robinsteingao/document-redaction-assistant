@@ -18,17 +18,28 @@ cffi 分别提供 CPython 3.10、3.11、3.12、3.13 的 Windows x64 wheel；其�
 
 上游项目来源：[cryptography](https://github.com/pyca/cryptography)、[cffi](https://cffi.readthedocs.io/)、[pycparser](https://github.com/eliben/pycparser)、[pypdf](https://github.com/py-pdf/pypdf)、[defusedxml](https://github.com/tiran/defusedxml)。
 
-## 二进制内部组件：尚需补充核对
+## 已核对的内嵌与离线组件
 
-- 对上述 cryptography 42.0.8 Windows wheel 的运行查询返回 `OpenSSL 3.2.2 4 Jun 2024`。OpenSSL 3.2.2 上游 `LICENSE.txt` 使用 Apache-2.0；其官方文本位于 https://github.com/openssl/openssl/blob/openssl-3.2.2/LICENSE.txt 。
-- 仅核对 wheel 的 METADATA 与顶层许可文件，不能证明其全部内嵌 OpenSSL、Rust、C 库组件及所需 attribution 均已核对完整。此项仍是实际二进制公开分发门槛，不能写成“第三方声明全部通过”。
-- 正式分发前，发布负责人应补齐适用的内嵌组件许可与版权材料，记录具体 wheel 哈希，并让接收者能在分发包内取得所需完整文本。不得只留一个网络链接来代替必须随包提供的文本。
+以下只覆盖 2026-10-20 的 Windows x64 / CPython 3.11 离线候选。完整文本随对应 wheel、运行时或 LibreOffice 目录分发，不因写入本文件而改变其许可证。文件哈希见本地 `sources-manifest.json`；公开仓库不入库这些二进制。
 
-## 可选组件（不属于上述核心 wheelhouse）
+| 组件 | 版本 | 许可声明 | 随包文本 |
+| --- | --- | --- | --- |
+| CPython | 3.11.9 | PSF License | `app/runtime/python/LICENSE.txt` |
+| OpenSSL（cryptography 静态链接查询结果） | 3.2.2，4 Jun 2024 | Apache-2.0 | 上游 `openssl-3.2.2/LICENSE.txt`；wheel 未单列 OpenSSL NOTICE 文件 |
+| cryptography 编译产物 | 42.0.8 | Apache-2.0 OR BSD-3-Clause | wheel 内 `LICENSE`、`LICENSE.APACHE`、`LICENSE.BSD` |
+| rapidocr-onnxruntime | 1.4.4 | METADATA 声明 Apache-2.0 | wheel 随包；未另附独立模型许可文件 |
+| 随 RapidOCR 分发的模型 | `ch_PP-OCRv4_det_infer.onnx`、`ch_PP-OCRv4_rec_infer.onnx`、`ch_ppocr_mobile_v2.0_cls_infer.onnx` | 由上述 wheel 一并分发 | 位于 `rapidocr_onnxruntime/models/` |
+| onnxruntime | 1.31.0 | MIT | wheel 内 `onnxruntime/LICENSE`、`ThirdPartyNotices.txt` |
+| pypdfium2 / PDFium | 5.14.0 | BSD-3-Clause、Apache-2.0 及依赖许可 | wheel 自带许可文件 |
+| opencv-python | 4.11.0.86 | Apache-2.0 | wheel 内 `LICENSE.txt`、`LICENSE-3RD-PARTY.txt` |
+| numpy | 1.26.4 | BSD-3-Clause，并声明其捆绑库 | wheel 内 `LICENSE.txt` |
+| LibreOffice | 26.2.6 Windows x64 | MPL-2.0 及第三方附加条款 | `app/office_runtime/license.txt`、`NOTICE`、`LICENSE.html` |
 
-Office 外发校验使用 `lxml`、`python-docx`、`openpyxl`，测试还可能使用 `pytest`、`Pillow`；本项目的 Python wheel 不内嵌这些库。安装者应保留实际安装版本携带的许可文件。
+其余离线安装 wheel（cffi、pycparser、pypdf、defusedxml、lxml、python-docx、openpyxl、Pillow、protobuf、pyclipper、shapely、PyYAML、six、tqdm、packaging、colorama、flatbuffers、typing-extensions、et-xmlfile）均未修改。其 METADATA 或 wheel 内许可文件随 wheel 保留；et_xmlfile 与 flatbuffers 的声明位于 METADATA，未另见独立许可文件。
 
-OCR 引擎、模型权重、Python 运行时、PDFium、LibreOffice 不包含在上述基础候选中。如将来加入离线包，必须逐版本、逐模型核对并随包提供相应许可与声明；不得从本清单推导其已获分发批准。
+OpenSSL 3.2.2 版权归 OpenSSL 项目贡献者。cryptography 的 Rust 绑定是该项目自身双许可编译产物，本包不另分发 Rust 工具链。LibreOffice 对应源码位于 https://download.documentfoundation.org/libreoffice/src/26.2.6/ ；MSI SHA256 为 `f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660`。
+
+此核对是文件级与运行查询证据，不是法律意见，也不表示可以省略真实反馈或发布授权。
 
 ## 分发责任
 

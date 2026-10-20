@@ -18,6 +18,7 @@
 - P2：新增仅依赖标准库的启动检查器，检查 Python 最低版本、发行包版本上下界和实际可导入性；安装前后以及 embedded/python/py 三个启动分支一致调用。不兼容环境明确失败，不自动降级全局环境。
 - 离线 OCR 安装先处理核心依赖，并设置 PIP_NO_INDEX；组件源与实际运行验收结果单独留证，不以目录存在或 bundled 标记代替验收。
 - 本轮回归 `248 passed, 2 skipped`。仅在独立仓 B 修订；未公开推送、打 tag 或制作 Release。离线完整包的安装、OCR、转换及第三方分发声明须分别验证。
+- Windows x64 源码复验补充：CPython 3.10.19、3.12.12、3.13.12 均为 `248 passed, 2 skipped`；离线包不因此扩大到这些版本。第三方声明已按实际 Python、OpenSSL 3.2.2、OCR 模型、ONNX Runtime、PDFium 与 LibreOffice 26.2.6 文件登记。真实反馈与 tag/Release 授权仍未闭环。
 - 离线候选组件已补齐并重新解压实测：包内CPython3.11、20个OCR/Office依赖wheel及官方LibreOffice26.2.6。禁用包索引安装成功，真实OCR识别合成文本、Office转换输出PDF、加密映射CLI及隐藏指标门禁均通过；不扩展为断网沙箱、干净Windows虚拟机或Python3.10/3.12/3.13验证结论，二进制分发声明与真实反馈仍待闭环。
 
 ### 2026-10-20 许可决策与复核补充（历史，后续修复见上）
